@@ -9,12 +9,23 @@ from google.cloud import bigquery
 import anthropic
 from prompts.med_claims_prompt import SYSTEM_PROMPT
 
+# Import debug function from main_agent
+DEBUG = os.getenv('DEBUG', '0') == '1'
+
+def debug_log(message: str, agent: str = "MED_CLAIMS"):
+    """Centralized debug logging with timestamps"""
+    if DEBUG:
+        timestamp = time.strftime("%H:%M:%S.%f")[:-3]  # Include milliseconds
+        print(f"[{timestamp}] [{agent}] {message}")
+
 load_dotenv()
 
 class MedClaimsAgent:
     def __init__(self):
+        debug_log("Initializing MedClaimsAgent")
         self.bq_client = bigquery.Client(project="unique-bonbon-472921-q8")
         self.anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        debug_log("MedClaimsAgent initialized")
         
     def execute_sql_query(self, sql: str):
         clean_sql = sql.strip()
@@ -24,9 +35,11 @@ class MedClaimsAgent:
             clean_sql = clean_sql[3:]
         if clean_sql.endswith("```"):
             clean_sql = clean_sql[:-3]
-        print(clean_sql)
+        debug_log(f"Executing SQL query: {clean_sql[:100]}...")
         query_job = self.bq_client.query(clean_sql)
+        debug_log(f"BigQuery job started: {query_job.job_id}")
         results = query_job.result()
+        debug_log(f"BigQuery job completed, converting to Polars")
         # Convert BigQuery result to Arrow then to Polars
         arrow_table = results.to_arrow()
         df = pl.from_arrow(arrow_table)
@@ -42,8 +55,9 @@ class MedClaimsAgent:
                 {"role": "user", "content": query}
             ]
         )
-        print(response.content[0].text)
-        return response.content[0].text
+        generated_sql = response.content[0].text
+        debug_log(f"Claude generated SQL ({len(generated_sql)} chars)")
+        return generated_sql
     
     def get_data(self, query: str, save_output: bool = False):
         generated_sql = ""
@@ -51,8 +65,11 @@ class MedClaimsAgent:
         error_msg = ""
         
 
+        debug_log(f"Processing query: {query}")
         generated_sql = self.generate_sql(query)
+        debug_log(f"Executing generated SQL")
         result_df = self.execute_sql_query(generated_sql)
+        debug_log(f"Query completed, result shape: {result_df.shape if hasattr(result_df, 'shape') else 'N/A'}")
         
         if save_output:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -75,6 +92,7 @@ class MedClaimsAgent:
                     f.write(f"Found {len(result_df)} rows\n\n{str(result_df)}\n\n")
                 f.write(f"Timestamp: {timestamp}\n")
             
+            debug_log(f"Results saved to {filename}")
             print(f"Results saved to {filename}")
         
         if error_msg:

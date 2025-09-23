@@ -7,6 +7,16 @@ from typing import List, Dict, Union
 from dotenv import load_dotenv
 # from openai import OpenAI
 import anthropic
+
+# Global debug flag
+DEBUG = os.getenv('DEBUG', '0') == '1'
+
+def debug_log(message: str, agent: str = "MAIN"):
+    """Centralized debug logging with timestamps"""
+    if DEBUG:
+        timestamp = time.strftime("%H:%M:%S.%f")[:-3]  # Include milliseconds
+        print(f"[{timestamp}] [{agent}] {message}")
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from prompts.main_prompt import MAIN_AGENT_SYSTEM_PROMPT, ANALYSIS_PROMPT
 from agent.rx_claims_agent import RXClaimsAgent
@@ -16,6 +26,7 @@ load_dotenv()
 
 class MainAgent:
     def __init__(self):
+        debug_log("Initializing MainAgent")
         self.anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         self.rx_claims_agent = RXClaimsAgent()
         self.med_claims_agent = MedClaimsAgent()
@@ -24,6 +35,7 @@ class MainAgent:
         self.trace_log: List[str] = []
         self.stored_results: Dict[str, Union[pl.DataFrame, str]] = {}
         self.workflow_complete = False
+        debug_log("MainAgent initialized")
         
     def add_to_history(self, role: str, content: str):
         self.conversation_history.append({"role": role, "content": content})
@@ -132,9 +144,11 @@ class MainAgent:
         if analysis_match:
             commands.append({"type": "analysis", "content": analysis_match.group(1).strip()})
 
+        debug_log(f"Parsed {len(commands)} commands: {[cmd['type'] for cmd in commands]}")
         return commands
     
     def execute_commands(self, commands: List[Dict[str, str]]) -> tuple[str, List[str]]:
+        debug_log(f"Executing {len(commands)} commands")
         execution_log = []
         status_updates = []
         
@@ -142,19 +156,24 @@ class MainAgent:
             cmd_type = command["type"]
             cmd_content = command["content"]
             timestamp = time.strftime("%H:%M:%S")
+            debug_log(f"Executing command: {cmd_type}")
+
             
             if cmd_type == "think":
+                debug_log(f"Thinking: {cmd_content[:100]}...", "MAIN")
                 log_entry = f"[THINKING]: {cmd_content}"
                 execution_log.append(log_entry)
                 self.trace_log.append(f"[{timestamp}] {log_entry}")
                 
             elif cmd_type == "user_message":
+                debug_log(f"Sending user message: {cmd_content[:100]}...", "MAIN")
                 log_entry = f"[USER MESSAGE]: {cmd_content}"
                 execution_log.append(log_entry)
                 self.trace_log.append(f"[{timestamp}] {log_entry}")
                 status_updates.append("WAITING_FOR_USER_INPUT")
                 
             elif cmd_type == "output":
+                debug_log(f"Final output: {cmd_content[:100]}...", "MAIN")
                 log_entry = f"[FINAL OUTPUT]: {cmd_content}"
                 execution_log.append(log_entry)
                 self.trace_log.append(f"[{timestamp}] {log_entry}")
@@ -178,8 +197,10 @@ class MainAgent:
                 call_log = f"[CALLING RX CLAIMS AGENT]: {cmd_content}"
                 execution_log.append(call_log)
                 self.trace_log.append(f"[{timestamp}] {call_log}")
+                debug_log(f"Calling RX Claims Agent: {cmd_content}")
                 try:
                     result = self.rx_claims_agent.get_data(cmd_content, save_output=True)
+                    debug_log(f"RX Claims Agent returned: {type(result)}")
                     result_key = f"rx_claims_{len(self.stored_results)}"
                     self.stored_results[result_key] = result
                     
@@ -207,8 +228,10 @@ class MainAgent:
                 call_log = f"[CALLING MED CLAIMS AGENT]: {cmd_content}"
                 execution_log.append(call_log)
                 self.trace_log.append(f"[{timestamp}] {call_log}")
+                debug_log(f"Calling Med Claims Agent: {cmd_content}")
                 try:
                     result = self.med_claims_agent.get_data(cmd_content, save_output=True)
+                    debug_log(f"Med Claims Agent returned: {type(result)}")
                     result_key = f"med_claims_{len(self.stored_results)}"
                     self.stored_results[result_key] = result
                     
@@ -233,6 +256,7 @@ class MainAgent:
                     status_updates.append(f"Med Claims query failed: {str(e)}")
                     
             elif cmd_type == "analysis":
+                debug_log(f"Analysis request: {cmd_content[:100]}...", "MAIN")
                 log_entry = f"[ANALYSIS REQUEST]: {cmd_content}"
                 execution_log.append(log_entry)
                 self.trace_log.append(f"[{timestamp}] {log_entry}")
@@ -275,6 +299,11 @@ class MainAgent:
         if user_input:
             messages.append({"role": "user", "content": user_input})
 
+        # Don't call API if no new content to process
+        if not user_input and not messages:
+            debug_log("No new input or conversation context, skipping API call")
+            return "No new input to process."
+
         try:
             response = self.anthropic_client.messages.create(
                 model="claude-sonnet-4-20250514",
@@ -283,9 +312,7 @@ class MainAgent:
                 messages=messages
             )
 
-            # Debug the response structure
-            print(f"DEBUG: Response type: {type(response)}")
-            print(f"DEBUG: Response content: {response}")
+            debug_log(f"Anthropic API Response: {len(response.content)} content blocks, {getattr(response.usage, 'output_tokens', 0)} tokens")
 
             if hasattr(response, 'content') and len(response.content) > 0:
                 agent_response = response.content[0].text
@@ -298,23 +325,30 @@ class MainAgent:
     
     def process_turn(self, user_input: str = None) -> str:
         if user_input:
+            debug_log(f"Processing user input: {user_input}")
             self.add_to_history("user", user_input)
-        
-        agent_response = self.generate_response()
-        
+        else:
+            debug_log("Processing turn with no new user input")
+
+        agent_response = self.generate_response(user_input)
+
         commands = self.parse_commands(agent_response)
         execution_log, status_updates = self.execute_commands(commands)
-        
+
         self.add_to_history("assistant", agent_response)
-        
-        status_section = ""
+
+        # Handle status updates for internal tracking
         if status_updates:
             status_summary = "\n".join(status_updates)
             available_data = f"Available stored data: {list(self.stored_results.keys())}" if self.stored_results else "No stored data available"
             self.add_to_history("system", f"EXECUTION STATUS:\n{status_summary}\n{available_data}")
-            status_section = f"\n\n=== STATUS ===\n{status_summary}"
-        
-        return f"=== AGENT RESPONSE ===\n{agent_response}\n\n=== EXECUTION LOG ===\n{execution_log}{status_section}"
+
+            # Log status updates to debug log
+            for update in status_updates:
+                debug_log(f"Status: {update}")
+
+        # Always return clean agent response - debug info goes to debug_log()
+        return agent_response
     
     def chat(self):
         print("Orchestrator Agent started. Type 'quit' to exit.")
@@ -335,24 +369,55 @@ class MainAgent:
                         print("\n=== WORKFLOW COMPLETED ===")
                         break
 
-                    # Check if we need to wait for user input after the initial response
-                    if "WAITING_FOR_USER_INPUT" in response:
-                        continue  # Go back to asking for user input
-
-                    workflow_complete = False
+                    # Initialize auto-continue state
+                    workflow_complete = self.workflow_complete
                     waiting_for_user = False
 
+                    # Check if we need to wait for user input after the initial response
+                    if "<user_message>" in response:
+                        debug_log("Agent requests user input, returning to input prompt")
+                        waiting_for_user = True
+
+                    # Check if we have fresh sub-agent results that need to be presented
+                    if self.stored_results and not waiting_for_user:
+                        # Get the most recent result key
+                        recent_keys = [k for k in self.stored_results.keys() if k.startswith(('med_claims_', 'rx_claims_')) and isinstance(self.stored_results[k], pl.DataFrame)]
+                        if recent_keys:
+                            latest_key = max(recent_keys)
+                            latest_df = self.stored_results[latest_key]
+                            debug_log(f"Presenting results from {latest_key}")
+                            if not latest_df.is_empty():
+                                print(f"\nHere are the results from {latest_key}:")
+                                print(latest_df)
+                            else:
+                                print(f"\nNo data found in {latest_key}")
+                            waiting_for_user = True
+
+                    # Auto-continue only if agent has actionable work to do
                     while not workflow_complete and not waiting_for_user:
                         try:
                             response = self.process_turn()
                             print(f"\n{response}")
 
+                            # Check for completion or blocking conditions
                             if self.workflow_complete or "WORKFLOW_COMPLETE" in response:
                                 workflow_complete = True
                                 break
                             elif "WAITING_FOR_USER_INPUT" in response:
                                 waiting_for_user = True
                                 break
+                            elif "No new input to process" in response:
+                                debug_log("Agent has no new work, stopping auto-continue")
+                                break
+                            elif "Error: Unexpected response structure" in response:
+                                debug_log("Empty API response detected, stopping auto-continue")
+                                break
+                            else:
+                                # Check if any commands were parsed - if not, agent is done
+                                commands = self.parse_commands(response)
+                                if not commands:
+                                    debug_log("No commands parsed, agent completed work, stopping auto-continue")
+                                    break
                                 
                         except Exception as e:
                             print(f"Error in auto-continue: {e}")

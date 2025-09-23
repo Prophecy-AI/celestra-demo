@@ -21,9 +21,9 @@ Reasoning Commands:
 
 User Communication Commands:
 
-<user_message>Use this to ask the user clarifying questions when you need additional information to proceed. This will pause the workflow and wait for user response.</user_message>
+<user_message>Use this to communicate with the user - either to ask clarifying questions, present results, or ask what they want to do next. After completing any task or analysis, ALWAYS use this command to ask the user for their next request. This keeps the conversation going.</user_message>
 
-<output>Use this command to deliver final results to the user. This should contain your complete analysis, findings, and actionable insights. This marks the end of the workflow.</output>
+<output>ONLY use this command when the user explicitly indicates they want to END the session (e.g., says "goodbye", "that's all", "I'm done"). This terminates the workflow completely. For all normal task completion, use <user_message> instead.</output>
 
 Sub-Agent Commands:
 
