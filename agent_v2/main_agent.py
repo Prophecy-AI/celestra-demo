@@ -18,6 +18,7 @@ from prompts.main_prompt import MAIN_AGENT_SYSTEM_PROMPT, ANALYSIS_PROMPT
 from .context import SharedContext, TaskStatus
 from .rx_claims_agent import RXClaimsAgent
 from .med_claims_agent import MedClaimsAgent
+from .colors import *
 from .utils import debug_print
 
 load_dotenv()
@@ -33,9 +34,33 @@ class MainAgent:
         self.debug = os.getenv('DEBUG', '0') == '1'
 
     def log(self, message: str):
-        """Simple logging with grey/dim color"""
+        """Colored debug logging"""
         if self.debug:
-            debug_print(f"[{time.strftime('%H:%M:%S')}] {message}")
+            timestamp = f"{TIMESTAMP}[{time.strftime('%H:%M:%S')}]{RESET}"
+
+            # Color based on log content patterns
+            if "ERROR" in message or "failed" in message.lower():
+                color = ERROR
+            elif "WARNING" in message:
+                color = WARNING
+            elif "SUCCESS" in message or "completed" in message or "Complete" in message:
+                color = SUCCESS
+            elif "PROCESS" in message or "Iteration" in message:
+                color = PROCESS
+            elif "PARSE" in message:
+                color = CYAN
+            elif "EXECUTE" in message:
+                color = MAGENTA
+            elif "LLM" in message:
+                color = BRIGHT_BLUE
+            elif "SQL" in message or "QUERY" in message:
+                color = SQL
+            elif "ANALYSIS" in message:
+                color = BRIGHT_MAGENTA
+            else:
+                color = RESET
+
+            print(f"{timestamp} {color}{message}{RESET}")
 
     def parse_agent_response(self, response: str) -> List[Dict[str, Any]]:
         """Parse structured response from LLM"""

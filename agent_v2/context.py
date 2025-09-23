@@ -8,7 +8,12 @@ import time
 import os
 import polars as pl
 from threading import Lock
-from .utils import debug_print
+
+try:
+    from .colors import *
+except ImportError:
+    # Fallback if colors module not available
+    TIMESTAMP = RESET = COMPONENT = SUCCESS = WARNING = ERROR = DATA = ''
 
 class TaskStatus(Enum):
     PENDING = "pending"
@@ -55,9 +60,24 @@ class SharedContext:
         self.debug = os.getenv('DEBUG', '0') == '1'
 
     def log(self, message: str):
-        """Debug logging with grey/dim color"""
+        """Colored debug logging"""
         if self.debug:
-            debug_print(f"[CONTEXT][{time.strftime('%H:%M:%S')}] {message}")
+            timestamp = f"{TIMESTAMP}[{time.strftime('%H:%M:%S')}]{RESET}"
+            component = f"{COMPONENT}[CONTEXT]{RESET}"
+
+            # Color based on content
+            if "ERROR" in message or "not found" in message:
+                color = ERROR
+            elif "WARNING" in message:
+                color = WARNING
+            elif "completed" in message or "added" in message.lower():
+                color = SUCCESS
+            elif "DataFrame" in message or "rows" in message:
+                color = DATA
+            else:
+                color = RESET
+
+            print(f"{timestamp} {component} {color}{message}{RESET}")
 
     def add_task(self, task_id: str, agent: str, description: str) -> Task:
         with self._lock:
