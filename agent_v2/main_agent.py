@@ -225,17 +225,38 @@ Analysis Request: {request}"""
         try:
             local_vars = dict(self.context.dataframes)
             local_vars['pl'] = pl
-            exec(code, {"__builtins__": __builtins__, "pl": pl}, local_vars)
+
+            # Capture print output during execution
+            import io
+            import sys
+            old_stdout = sys.stdout
+            sys.stdout = captured_output = io.StringIO()
+
+            try:
+                exec(code, {"__builtins__": __builtins__, "pl": pl}, local_vars)
+            finally:
+                sys.stdout = old_stdout
+
+            # Log captured output
+            output = captured_output.getvalue()
+            if output and self.debug:
+                self.log(f"[ANALYSIS-OUTPUT] Execution output:\n{output}")
 
             if 'result' in local_vars:
                 result = local_vars['result']
                 if isinstance(result, pl.DataFrame):
                     self.context.store_dataframe('analysis_result', result)
+                    self.log(f"[ANALYSIS-RESULT] DataFrame stored: {len(result)} rows, columns: {result.columns}")
                     return f"Analysis completed: {len(result)} rows"
-                return str(result)
+                else:
+                    self.log(f"[ANALYSIS-RESULT] Result value: {result}")
+                    return str(result)
+
+            self.log("[ANALYSIS-RESULT] No 'result' variable found in executed code")
             return "Analysis completed but no result found"
 
         except Exception as e:
+            self.log(f"[ANALYSIS-ERROR] Execution failed: {str(e)}")
             return f"Analysis failed: {str(e)}"
 
     def process_request(self, user_input: str) -> Tuple[str, Dict[str, Any]]:
