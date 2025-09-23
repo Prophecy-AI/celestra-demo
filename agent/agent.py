@@ -2,8 +2,10 @@ import os
 import sys
 import time
 from dotenv import load_dotenv
-from openai import OpenAI
+# from openai import OpenAI
+import anthropic
 from google.cloud import bigquery
+import polars as pl
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from prompts.complete_prompt import build_complete_sql_prompt
 
@@ -11,7 +13,7 @@ load_dotenv()
 
 class CompleteAgent:
     def __init__(self):
-        self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         self.bq_client = bigquery.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT", "unique-bonbon-472921-q8"))
 
     def generate_sql(self, query: str) -> str:
@@ -19,15 +21,16 @@ class CompleteAgent:
             med_table=os.getenv("MED_TABLE", "unique-bonbon-472921-q8.Claims.medical_claims"),
             rx_table=os.getenv("RX_TABLE", "unique-bonbon-472921-q8.Claims.rx_claims"),
         )
-        resp = self.openai_client.chat.completions.create(
-            model="gpt-4o",
+        resp = self.anthropic_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4096,
+            system=system_prompt,
             messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": query},
+                {"role": "user", "content": query}
             ],
-            temperature=0,
+            temperature=0
         )
-        return resp.choices[0].message.content.strip()
+        return resp.content[0].text.strip()
 
     def execute_sql(self, sql: str):
         s = sql.strip()
@@ -39,7 +42,9 @@ class CompleteAgent:
             s = s[:-3]
         s = s.replace("'AND", "' AND").replace(")AND", ") AND").replace("%')AND", "%') AND")
         job = self.bq_client.query(s)
-        return job.result().to_dataframe()
+        # Convert BigQuery result to Arrow then to Polars
+        arrow_table = job.result().to_arrow()
+        return pl.from_arrow(arrow_table)
 
     def run(self, nl_query: str):
         sql = self.generate_sql(nl_query)
@@ -51,12 +56,12 @@ class CompleteAgent:
         with open(sql_path, "w") as f:
             f.write(sql)
         out_path = f"output/complete_result_{ts}.csv"
-        if hasattr(df, "to_csv"):
-            df.to_csv(out_path, index=False)
+        if df is not None:
+            df.write_csv(out_path)
         print(f"SQL saved: {sql_path}")
         print(f"CSV saved: {out_path}")
-        if df is not None and not df.empty:
-            print(df.head(10).to_string(index=False))
+        if df is not None and not df.is_empty():
+            print(df.head(10))
 
 def main():
     agent = CompleteAgent()

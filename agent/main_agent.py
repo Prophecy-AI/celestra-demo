@@ -2,10 +2,11 @@ import os
 import sys
 import re
 import time
-import pandas as pd
+import polars as pl
 from typing import List, Dict, Union
 from dotenv import load_dotenv
-from openai import OpenAI
+# from openai import OpenAI
+import anthropic
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from prompts.main_prompt import MAIN_AGENT_SYSTEM_PROMPT, ANALYSIS_PROMPT
 from agent.rx_claims_agent import RXClaimsAgent
@@ -15,13 +16,13 @@ load_dotenv()
 
 class MainAgent:
     def __init__(self):
-        self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         self.rx_claims_agent = RXClaimsAgent()
         self.med_claims_agent = MedClaimsAgent()
         self.conversation_history: List[Dict[str, str]] = []
         self.session_start_time = time.strftime("%Y%m%d_%H%M%S")
         self.trace_log: List[str] = []
-        self.stored_results: Dict[str, Union[pd.DataFrame, str]] = {}
+        self.stored_results: Dict[str, Union[pl.DataFrame, str]] = {}
         self.workflow_complete = False
         
     def add_to_history(self, role: str, content: str):
@@ -47,8 +48,8 @@ class MainAgent:
     def execute_analysis(self, analysis_request: str) -> str:
         available_dfs = []
         for key, data in self.stored_results.items():
-            if isinstance(data, pd.DataFrame):
-                columns = list(data.columns)
+            if isinstance(data, pl.DataFrame):
+                columns = data.columns
                 rows = len(data)
                 available_dfs.append(f"{key}: DataFrame with {rows} rows, columns: {columns}")
             else:
@@ -57,39 +58,43 @@ class MainAgent:
         df_info = "\n".join(available_dfs)
         
         messages = [
-            {"role": "system", "content": ANALYSIS_PROMPT},
             {"role": "user", "content": f"Available DataFrames with actual schemas:\n{df_info}\n\nAnalysis Request: {analysis_request}"}
         ]
-        
-        response = self.openai_client.chat.completions.create(
-            model="gpt-4o",
+
+        response = self.anthropic_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4096,
+            system=ANALYSIS_PROMPT,
             messages=messages,
             temperature=0.1
         )
-        
-        analysis_response = response.choices[0].message.content
+
+        if hasattr(response, 'content') and len(response.content) > 0:
+            analysis_response = response.content[0].text
+        else:
+            return f"Error: Unexpected analysis response structure: {response}"
         
         code_match = re.search(r'```python\n(.*?)\n```', analysis_response, re.DOTALL)
         if code_match:
             pandas_code = code_match.group(1)
             
-            local_vars = {'pd': pd}
+            local_vars = {'pl': pl}
             for key, df in self.stored_results.items():
-                if isinstance(df, pd.DataFrame):
+                if isinstance(df, pl.DataFrame):
                     local_vars[key] = df
-            
+
             try:
-                exec(pandas_code, {"__builtins__": __builtins__, "pd": pd}, local_vars)
+                exec(pandas_code, {"__builtins__": __builtins__, "pl": pl}, local_vars)
                 
                 if 'result' in local_vars:
                     result_df = local_vars['result']
-                    if isinstance(result_df, pd.DataFrame):
+                    if isinstance(result_df, pl.DataFrame):
                         self.stored_results['final_result'] = result_df
                         if len(result_df) > 10:
-                            sample = result_df.head(10).to_string(index=False)
+                            sample = str(result_df.head(10))
                             return f"Analysis completed. Result DataFrame with {len(result_df)} rows (showing first 10):\n{sample}\n\n... and {len(result_df)-10} more rows"
                         else:
-                            return f"Analysis completed. Result DataFrame with {len(result_df)} rows:\n{result_df.to_string(index=False)}"
+                            return f"Analysis completed. Result DataFrame with {len(result_df)} rows:\n{str(result_df)}"
                     else:
                         return f"Analysis completed. Result: {result_df}"
                 else:
@@ -157,9 +162,9 @@ class MainAgent:
                 try:
                     ts = time.strftime("%Y%m%d_%H%M%S")
                     for key, df in self.stored_results.items():
-                        if isinstance(df, pd.DataFrame) and not df.empty:
+                        if isinstance(df, pl.DataFrame) and not df.is_empty():
                             out_path = f"output/{key}_{ts}.csv"
-                            df.to_csv(out_path, index=False)
+                            df.write_csv(out_path)
                             save_log = f"[DATA SAVED]: {out_path}"
                             execution_log.append(save_log)
                             self.trace_log.append(f"[{timestamp}] {save_log}")
@@ -178,13 +183,13 @@ class MainAgent:
                     result_key = f"rx_claims_{len(self.stored_results)}"
                     self.stored_results[result_key] = result
                     
-                    if isinstance(result, pd.DataFrame):
-                        if result.empty:
+                    if isinstance(result, pl.DataFrame):
+                        if result.is_empty():
                             status_updates.append(f"RX Claims query successful: No results found (stored as {result_key})")
                             result_summary = "No results found"
                         else:
                             status_updates.append(f"RX Claims query successful: Found {len(result)} rows (stored as {result_key})")
-                            result_summary = f"DataFrame with {len(result)} rows, columns: {list(result.columns)}"
+                            result_summary = f"DataFrame with {len(result)} rows, columns: {result.columns}"
                     else:
                         status_updates.append(f"RX Claims query completed (stored as {result_key})")
                         result_summary = str(result)[:200] + "..." if len(str(result)) > 200 else str(result)
@@ -207,13 +212,13 @@ class MainAgent:
                     result_key = f"med_claims_{len(self.stored_results)}"
                     self.stored_results[result_key] = result
                     
-                    if isinstance(result, pd.DataFrame):
-                        if result.empty:
+                    if isinstance(result, pl.DataFrame):
+                        if result.is_empty():
                             status_updates.append(f"Med Claims query successful: No results found (stored as {result_key})")
                             result_summary = "No results found"
                         else:
                             status_updates.append(f"Med Claims query successful: Found {len(result)} rows (stored as {result_key})")
-                            result_summary = f"DataFrame with {len(result)} rows, columns: {list(result.columns)}"
+                            result_summary = f"DataFrame with {len(result)} rows, columns: {result.columns}"
                     else:
                         status_updates.append(f"Med Claims query completed (stored as {result_key})")
                         result_summary = str(result)[:200] + "..." if len(str(result)) > 200 else str(result)
@@ -261,23 +266,33 @@ class MainAgent:
         return "\n\n".join(execution_log), status_updates
     
     def generate_response(self, user_input: str = None) -> str:
-        messages = [{"role": "system", "content": MAIN_AGENT_SYSTEM_PROMPT}]
-        
+        messages = []
+
         for msg in self.conversation_history:
-            messages.append(msg)
-        
+            if msg["role"] != "system":  # Skip system messages from history
+                messages.append(msg)
+
         if user_input:
             messages.append({"role": "user", "content": user_input})
-        
+
         try:
-            response = self.openai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=messages,
+            response = self.anthropic_client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=4096,
+                system=MAIN_AGENT_SYSTEM_PROMPT,
+                messages=messages
             )
-            
-            agent_response = response.choices[0].message.content
-            return agent_response
-            
+
+            # Debug the response structure
+            print(f"DEBUG: Response type: {type(response)}")
+            print(f"DEBUG: Response content: {response}")
+
+            if hasattr(response, 'content') and len(response.content) > 0:
+                agent_response = response.content[0].text
+                return agent_response
+            else:
+                return f"Error: Unexpected response structure: {response}"
+
         except Exception as e:
             return f"Error generating response: {str(e)}"
     
@@ -319,19 +334,25 @@ class MainAgent:
                     if self.workflow_complete:
                         print("\n=== WORKFLOW COMPLETED ===")
                         break
-                    
+
+                    # Check if we need to wait for user input after the initial response
+                    if "WAITING_FOR_USER_INPUT" in response:
+                        continue  # Go back to asking for user input
+
                     workflow_complete = False
                     waiting_for_user = False
-                    
+
                     while not workflow_complete and not waiting_for_user:
                         try:
                             response = self.process_turn()
                             print(f"\n{response}")
-                            
+
                             if self.workflow_complete or "WORKFLOW_COMPLETE" in response:
                                 workflow_complete = True
+                                break
                             elif "WAITING_FOR_USER_INPUT" in response:
                                 waiting_for_user = True
+                                break
                                 
                         except Exception as e:
                             print(f"Error in auto-continue: {e}")

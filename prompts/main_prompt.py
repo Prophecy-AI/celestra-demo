@@ -133,12 +133,12 @@ When executing the plan:
 """
 
 ANALYSIS_PROMPT = """
-You are a data analysis specialist. Your job is to create pandas code that combines and analyzes stored DataFrame results to answer the user's question.
+You are a data analysis specialist. Your job is to create polars code that combines and analyzes stored DataFrame results to answer the user's question.
 
 ## ANALYSIS STRATEGY:
 1. **Identify the stored DataFrames** you need to combine (e.g., rx_claims_0, med_claims_1)
-2. **Extract key identifiers** from each DataFrame (PRESCRIBER_NPI_NBR, PRIMARY_HCP) 
-3. **Create pandas operations** to combine the data (merge, set operations, filtering)
+2. **Extract key identifiers** from each DataFrame (PRESCRIBER_NPI_NBR, PRIMARY_HCP)
+3. **Create polars operations** to combine the data (join, set operations, filtering)
 4. **Apply business logic** (exclusions, filters, aggregations)
 5. **Generate final result** DataFrame that answers the question
 
@@ -146,19 +146,19 @@ You are a data analysis specialist. Your job is to create pandas code that combi
 
 **Exclusion Analysis** (doctors who do NOT prescribe X but DO treat Y):
 ```python
-import pandas as pd
+import polars as pl
 
 # Get unique doctors treating condition Y
-condition_doctors = set(med_claims_0['PRIMARY_HCP'].dropna().unique())
+condition_doctors = set(med_claims_0['PRIMARY_HCP'].drop_nulls().unique())
 
-# Get unique doctors prescribing drug X  
-prescribing_doctors = set(rx_claims_1['PRESCRIBER_NPI_NBR'].dropna().unique())
+# Get unique doctors prescribing drug X
+prescribing_doctors = set(rx_claims_1['PRESCRIBER_NPI_NBR'].drop_nulls().unique())
 
 # Find doctors treating Y but NOT prescribing X
 target_doctors = condition_doctors - prescribing_doctors
 
 # Create result DataFrame
-result = pd.DataFrame({
+result = pl.DataFrame({
     'provider_id': list(target_doctors),
     'category': 'Treats condition but does not prescribe drug'
 })
@@ -166,19 +166,19 @@ result = pd.DataFrame({
 
 **Intersection Analysis** (doctors who BOTH prescribe X AND treat Y):
 ```python
-import pandas as pd
+import polars as pl
 
 # Get unique doctors treating condition Y
-condition_doctors = set(med_claims_0['PRIMARY_HCP'].dropna().unique())
+condition_doctors = set(med_claims_0['PRIMARY_HCP'].drop_nulls().unique())
 
 # Get unique doctors prescribing drug X
-prescribing_doctors = set(rx_claims_1['PRESCRIBER_NPI_NBR'].dropna().unique())
+prescribing_doctors = set(rx_claims_1['PRESCRIBER_NPI_NBR'].drop_nulls().unique())
 
 # Find doctors who do BOTH
 target_doctors = condition_doctors & prescribing_doctors
 
 # Create result DataFrame
-result = pd.DataFrame({
+result = pl.DataFrame({
     'provider_id': list(target_doctors),
     'category': 'Both treats condition and prescribes drug'
 })
@@ -186,51 +186,54 @@ result = pd.DataFrame({
 
 **Volume Analysis** (doctors with specific thresholds):
 ```python
-import pandas as pd
+import polars as pl
 
 # Get patient counts by doctor
-patient_counts = med_claims_0.groupby('PRIMARY_HCP').size().reset_index(name='patient_count')
+patient_counts = med_claims_0.group_by('PRIMARY_HCP').agg(pl.count().alias('patient_count'))
 
-# Get prescription counts by doctor  
-prescription_counts = rx_claims_1.groupby('PRESCRIBER_NPI_NBR').size().reset_index(name='prescription_count')
+# Get prescription counts by doctor
+prescription_counts = rx_claims_1.group_by('PRESCRIBER_NPI_NBR').agg(pl.count().alias('prescription_count'))
 
-# Merge the datasets
-merged = pd.merge(
-    patient_counts.rename(columns={'PRIMARY_HCP': 'provider_id'}),
-    prescription_counts.rename(columns={'PRESCRIBER_NPI_NBR': 'provider_id'}),
+# Rename columns for join
+patient_counts = patient_counts.rename({'PRIMARY_HCP': 'provider_id'})
+prescription_counts = prescription_counts.rename({'PRESCRIBER_NPI_NBR': 'provider_id'})
+
+# Join the datasets
+merged = patient_counts.join(
+    prescription_counts,
     on='provider_id',
     how='inner'
 )
 
 # Apply thresholds
-result = merged[(merged['patient_count'] > 50) & (merged['prescription_count'] < 10)]
+result = merged.filter((pl.col('patient_count') > 50) & (pl.col('prescription_count') < 10))
 ```
 
 ## OUTPUT REQUIREMENTS:
 When performing analysis, provide:
 1. **Clear explanation** of what analysis you're performing
-2. **Complete pandas code** that combines the stored DataFrames
+2. **Complete polars code** that combines the stored DataFrames
 3. **Expected output** description
 
 Example Analysis:
 "I need to find doctors who treat Crohn's Disease (from med_claims_0) but have NOT prescribed Rinvoq (from rx_claims_1). 
 This requires set subtraction to exclude Rinvoq prescribers from Crohn's treaters.
 
-Pandas Analysis:
+Polars Analysis:
 ```python
-import pandas as pd
+import polars as pl
 
 # Get unique doctors treating Crohn's Disease
-crohns_doctors = set(med_claims_0['PRIMARY_HCP'].dropna().unique())
+crohns_doctors = set(med_claims_0['PRIMARY_HCP'].drop_nulls().unique())
 
 # Get unique doctors prescribing Rinvoq
-rinvoq_prescribers = set(rx_claims_1['PRESCRIBER_NPI_NBR'].dropna().unique())
+rinvoq_prescribers = set(rx_claims_1['PRESCRIBER_NPI_NBR'].drop_nulls().unique())
 
 # Find doctors treating Crohn's but NOT prescribing Rinvoq
 target_doctors = crohns_doctors - rinvoq_prescribers
 
 # Create result DataFrame
-result = pd.DataFrame({
+result = pl.DataFrame({
     'provider_id': list(target_doctors),
     'category': 'Treats Crohns but No Rinvoq',
     'count': len(target_doctors)

@@ -1,10 +1,12 @@
 import os
 import sys
 import time
+import polars as pl
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
 from google.cloud import bigquery
-from openai import OpenAI
+# from openai import OpenAI
+import anthropic
 from prompts.med_claims_prompt import SYSTEM_PROMPT
 
 load_dotenv()
@@ -12,7 +14,7 @@ load_dotenv()
 class MedClaimsAgent:
     def __init__(self):
         self.bq_client = bigquery.Client(project="unique-bonbon-472921-q8")
-        self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         
     def execute_sql_query(self, sql: str):
         clean_sql = sql.strip()
@@ -22,35 +24,35 @@ class MedClaimsAgent:
             clean_sql = clean_sql[3:]
         if clean_sql.endswith("```"):
             clean_sql = clean_sql[:-3]
-            
+        print(clean_sql)
         query_job = self.bq_client.query(clean_sql)
         results = query_job.result()
-        df = results.to_dataframe()
-        
+        # Convert BigQuery result to Arrow then to Polars
+        arrow_table = results.to_arrow()
+        df = pl.from_arrow(arrow_table)
+
         return df
     
     def generate_sql(self, query: str) -> str:
-        response = self.openai_client.chat.completions.create(
-            model="gpt-4o",
+        response = self.anthropic_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4096,
+            system=SYSTEM_PROMPT,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": query}
-            ],
+            ]
         )
-        return response.choices[0].message.content
+        print(response.content[0].text)
+        return response.content[0].text
     
     def get_data(self, query: str, save_output: bool = False):
         generated_sql = ""
         result_df = None
         error_msg = ""
         
-        try:
-            generated_sql = self.generate_sql(query)
-            result_df = self.execute_sql_query(generated_sql)
-        except Exception as e:
-            error_msg = f"Error fetching medical claims data: {str(e)}"
-            import pandas as pd
-            result_df = pd.DataFrame()
+
+        generated_sql = self.generate_sql(query)
+        result_df = self.execute_sql_query(generated_sql)
         
         if save_output:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -67,10 +69,10 @@ class MedClaimsAgent:
                 f.write("-" * 40 + "\n")
                 if error_msg:
                     f.write(error_msg + "\n\n")
-                elif result_df.empty:
+                elif result_df.is_empty():
                     f.write("No results found\n\n")
                 else:
-                    f.write(f"Found {len(result_df)} rows\n\n{result_df.to_string(index=False)}\n\n")
+                    f.write(f"Found {len(result_df)} rows\n\n{str(result_df)}\n\n")
                 f.write(f"Timestamp: {timestamp}\n")
             
             print(f"Results saved to {filename}")
@@ -99,8 +101,7 @@ def main():
         except KeyboardInterrupt:
             print("\nGoodbye!")
             break
-        except Exception as e:
-            print(f"Error: {e}")
+    
 
 if __name__ == "__main__":
     main()

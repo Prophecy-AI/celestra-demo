@@ -1,5 +1,7 @@
 python-dotenv==1.1.1
-openai==1.93.0
-pandas==2.3.2
+# openai==1.93.0
+anthropic
+polars
 e2b-code-interpreter
 google-cloud-bigquery==3.21.0
+pyarrow

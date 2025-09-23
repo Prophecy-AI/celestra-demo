@@ -2,6 +2,7 @@ import sys
 import time
 from dotenv import load_dotenv
 from google.cloud import bigquery
+import polars as pl
 from prompts.sql_planner_prompt import SQLPlannerPrompt
 
 load_dotenv()
@@ -46,24 +47,26 @@ class BigQueryAgent:
             query_time = time.time() - query_start
             print(f"DEBUG: BigQuery execution took {query_time:.2f} seconds")
             
-            print("DEBUG: Converting to DataFrame...")
+            print("DEBUG: Converting to Polars DataFrame...")
             df_start = time.time()
-            df = results.to_dataframe()
+            # Convert BigQuery result to Arrow then to Polars
+            arrow_table = results.to_arrow()
+            df = pl.from_arrow(arrow_table)
             df_time = time.time() - df_start
-            print(f"DEBUG: DataFrame conversion took {df_time:.2f} seconds")
+            print(f"DEBUG: Polars DataFrame conversion took {df_time:.2f} seconds")
             
             total_time = time.time() - total_start
             print(f"DEBUG: Total execution time: {total_time:.2f} seconds")
             
             print("Results:")
             print("-" * 40)
-            if df.empty:
+            if df.is_empty():
                 print("No results found")
                 result_text = "No results found"
             else:
                 print(f"Found {len(df)} rows")
-                print(df.to_string(index=False))
-                result_text = f"Found {len(df)} rows\n\n{df.to_string(index=False)}"
+                print(df)
+                result_text = f"Found {len(df)} rows\n\n{str(df)}"
             
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             filename = f"query_results_{timestamp}.txt"
