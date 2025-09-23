@@ -8,6 +8,7 @@ import time
 import os
 import polars as pl
 from threading import Lock
+from .utils import debug_print
 
 class TaskStatus(Enum):
     PENDING = "pending"
@@ -54,9 +55,9 @@ class SharedContext:
         self.debug = os.getenv('DEBUG', '0') == '1'
 
     def log(self, message: str):
-        """Debug logging"""
+        """Debug logging with grey/dim color"""
         if self.debug:
-            print(f"[CONTEXT][{time.strftime('%H:%M:%S')}] {message}")
+            debug_print(f"[CONTEXT][{time.strftime('%H:%M:%S')}] {message}")
 
     def add_task(self, task_id: str, agent: str, description: str) -> Task:
         with self._lock:

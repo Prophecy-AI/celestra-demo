@@ -10,6 +10,7 @@ from google.cloud import bigquery
 from dotenv import load_dotenv
 import anthropic
 from .context import SharedContext, TaskStatus
+from .utils import debug_print
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from prompts.rx_claims_prompt import SYSTEM_PROMPT as RX_CLAIMS_PROMPT
@@ -25,9 +26,9 @@ class RXClaimsAgent:
         self.debug = os.getenv('DEBUG', '0') == '1'
 
     def log(self, message: str):
-        """Debug logging"""
+        """Debug logging with grey/dim color"""
         if self.debug:
-            print(f"[RX-AGENT][{time.strftime('%H:%M:%S')}] {message}")
+            debug_print(f"[RX-AGENT][{time.strftime('%H:%M:%S')}] {message}")
 
     def generate_sql(self, request: str) -> str:
         """Generate SQL query from natural language request"""

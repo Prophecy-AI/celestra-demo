@@ -18,6 +18,7 @@ from prompts.main_prompt import MAIN_AGENT_SYSTEM_PROMPT, ANALYSIS_PROMPT
 from .context import SharedContext, TaskStatus
 from .rx_claims_agent import RXClaimsAgent
 from .med_claims_agent import MedClaimsAgent
+from .utils import debug_print
 
 load_dotenv()
 
@@ -32,9 +33,9 @@ class MainAgent:
         self.debug = os.getenv('DEBUG', '0') == '1'
 
     def log(self, message: str):
-        """Simple logging"""
+        """Simple logging with grey/dim color"""
         if self.debug:
-            print(f"[{time.strftime('%H:%M:%S')}] {message}")
+            debug_print(f"[{time.strftime('%H:%M:%S')}] {message}")
 
     def parse_agent_response(self, response: str) -> List[Dict[str, Any]]:
         """Parse structured response from LLM"""
@@ -234,6 +235,55 @@ Store the final result in a variable called 'result'."""
         self.log(f"[PROCESS] Executing {len(actions)} actions...")
         results = self.execute_actions(actions)
 
+        # Check if data was collected and needs analysis
+        if results.get("data_collected") and not results.get("completed"):
+            self.log(f"[PROCESS] Data collected, prompting for analysis...")
+
+            # Build status message about collected data
+            data_status = self._build_data_status_message()
+
+            # Inject a system message about available data
+            follow_up_prompt = f"""The sub-agents have completed data collection. Here's what's available:
+
+{data_status}
+
+Please analyze the collected data and provide results to the user. Use the <analysis> command if you need to process the data, then use <user_message> to present your findings."""
+
+            self.context.conversation_history.append({"role": "user", "content": follow_up_prompt})
+
+            # Call LLM again for analysis
+            try:
+                self.log(f"[PROCESS-FOLLOWUP] Requesting analysis of collected data")
+                follow_up_response = self.anthropic_client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=4096,
+                    system=MAIN_AGENT_SYSTEM_PROMPT,
+                    messages=self.context.conversation_history,
+                    temperature=0.1
+                )
+
+                follow_up_text = follow_up_response.content[0].text
+                self.log(f"[PROCESS-FOLLOWUP] Got analysis response of length {len(follow_up_text)}")
+
+                # Parse and execute follow-up actions
+                follow_up_actions = self.parse_agent_response(follow_up_text)
+                follow_up_results = self.execute_actions(follow_up_actions)
+
+                # Merge results
+                results["messages"].extend(follow_up_results.get("messages", []))
+                results["errors"].extend(follow_up_results.get("errors", []))
+                if follow_up_results.get("completed"):
+                    results["completed"] = True
+
+                # Add follow-up to conversation history
+                self.context.conversation_history.append({"role": "assistant", "content": follow_up_text})
+                agent_response += "\n\n" + follow_up_text
+
+            except Exception as e:
+                error_msg = f"Follow-up analysis failed: {str(e)}"
+                self.log(f"[PROCESS-FOLLOWUP-ERROR] {error_msg}")
+                results["errors"].append(error_msg)
+
         # Create summary
         self.log(f"[PROCESS] Creating summary...")
         summary = self.context.get_summary()
@@ -288,6 +338,33 @@ Store the final result in a variable called 'result'."""
                 break
             except Exception as e:
                 print(f"\nError: {str(e)}")
+
+    def _build_data_status_message(self) -> str:
+        """Build a status message about collected data"""
+        status_parts = []
+
+        # Check each stored DataFrame
+        for key, df in self.context.dataframes.items():
+            if isinstance(df, pl.DataFrame):
+                if df.is_empty():
+                    status_parts.append(f"- {key}: Empty DataFrame (0 rows)")
+                else:
+                    cols_preview = ", ".join(df.columns[:5])
+                    if len(df.columns) > 5:
+                        cols_preview += f" ... ({len(df.columns)} total columns)"
+                    status_parts.append(f"- {key}: DataFrame with {len(df)} rows, columns: [{cols_preview}]")
+
+        # Check for errors
+        if self.context.errors:
+            status_parts.append(f"\nErrors encountered: {len(self.context.errors)}")
+            for error in self.context.errors[-3:]:  # Show last 3 errors
+                status_parts.append(f"  - {error}")
+
+        # Check task status
+        task_summary = self.context.get_summary()
+        status_parts.append(f"\nTask Summary: {task_summary['completed']} completed, {task_summary['failed']} failed")
+
+        return "\n".join(status_parts)
 
     def save_results(self):
         """Save all collected data to files"""
