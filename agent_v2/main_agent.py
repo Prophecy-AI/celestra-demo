@@ -195,9 +195,23 @@ Analysis Request: {request}"""
         )
 
         code = response.content[0].text
+        self.log(f"[ANALYSIS] Raw response length: {len(code)} chars")
+
         code_match = re.search(r'```python\n(.*?)\n```', code, re.DOTALL)
         if code_match:
             code = code_match.group(1)
+            self.log(f"[ANALYSIS] Extracted Python code block: {len(code)} chars")
+        else:
+            self.log(f"[ANALYSIS-WARNING] No Python code block found, raw response: {code[:500]}")
+            # Try to extract code even without markers
+            if "import polars" in code or "import pl" in code:
+                self.log("[ANALYSIS] Attempting to use raw response as code")
+            else:
+                return "No valid Python code found in analysis response"
+
+        # Log the actual code to be executed
+        if self.debug:
+            self.log(f"[ANALYSIS-CODE] Code to execute:\n{code}")
 
         # Log variables referenced in code vs available
         if self.debug:
