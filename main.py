@@ -1,10 +1,39 @@
 import sys
-import tempfile
-import os
-import io
-import contextlib
+import base64
+from dotenv import load_dotenv
+from e2b_code_interpreter import Sandbox
 from prompts.planner_prompt import PlannerPrompt
 from scripts.embeddings import create_providers_with_embeddings
+
+load_dotenv()
+
+sbx = Sandbox.create()
+
+with open("data/providers.csv", "rb") as f:
+    providers_path = sbx.files.write("providers.csv", f)
+
+with open("data/Mounjaro Claim Sample.csv", "rb") as f:
+    claims_path = sbx.files.write("claims.csv", f)
+
+def run_code(code: str):
+    execution = sbx.run_code(code)
+    
+    if execution.error:
+        print("ERROR:")
+        print(execution.error.name)
+        print(execution.error.value)
+        return
+    
+    if execution.logs:
+        print(execution.logs)
+    
+    for i, result in enumerate(execution.results):
+        if result.png:
+            with open(f'chart-{i}.png', 'wb') as f:
+                f.write(base64.b64decode(result.png))
+            print(f'Chart saved to chart-{i}.png')
+        if result.text:
+            print(result.text)
 
 def execute_query(query: str, show_code: bool = True):
     planner = PlannerPrompt()
@@ -19,7 +48,6 @@ def execute_query(query: str, show_code: bool = True):
             print("-" * 40)
             print(generated_code)
             print("-" * 40)
-            print()
         
         code_to_execute = generated_code.strip()
         if code_to_execute.startswith("```python"):
@@ -27,27 +55,16 @@ def execute_query(query: str, show_code: bool = True):
         if code_to_execute.endswith("```"):
             code_to_execute = code_to_execute[:-3]
         
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as temp_file:
-            temp_file.write(code_to_execute)
-            temp_file_path = temp_file.name
+        code_to_execute = code_to_execute.replace('data/providers.csv', providers_path.path)
+        code_to_execute = code_to_execute.replace('data/Mounjaro Claim Sample.csv', claims_path.path)
         
-        try:
-            print("Results:")
-            print("-" * 40)
-            
-            output_buffer = io.StringIO()
-            with contextlib.redirect_stdout(output_buffer):
-                exec_globals = {'__name__': '__main__'}
-                exec(code_to_execute, exec_globals)
-            
-            output = output_buffer.getvalue()
-            if output.strip():
-                print(output)
-            else:
-                print("No output generated")
-            
-        finally:
-            os.unlink(temp_file_path)
+        # Add explicit execution to ensure E2B captures output
+        if "if __name__ ==" in code_to_execute:
+            code_to_execute = code_to_execute.replace('if __name__ == "__main__":', 'if True:  # Force execution')
+        
+        print("Results:")
+        print("-" * 40)
+        run_code(code_to_execute)
             
     except Exception as e:
         print(f"Error: {e}")
@@ -74,12 +91,17 @@ def main():
             execute_query(user_input, show_code)
             print()
             
-        except KeyboardInterrupt:
-            print("\nGoodbye! 👋")
-            break
-        except Exception as e:
-            print(f"Error: {e}")
-            print()
+         except KeyboardInterrupt:
+             print("\nGoodbye! 👋")
+             break
+         except Exception as e:
+             print(f"Error: {e}")
+             print()
+    
+    sbx.kill()
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        sbx.kill()
