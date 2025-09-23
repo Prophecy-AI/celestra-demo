@@ -101,7 +101,7 @@ class SharedContext:
                     self.log(f"[UPDATE_TASK] Task {task_id} started")
                 elif status == TaskStatus.COMPLETED:
                     task.complete(result)
-                    self.log(f"[UPDATE_TASK] Task {task_id} completed with result: {str(result)[:100]}")
+                    self.log(f"[UPDATE_TASK] Task {task_id} completed with result: {str(result)}")
                 elif status == TaskStatus.FAILED:
                     task.fail(error)
                     self.log(f"[UPDATE_TASK] Task {task_id} failed with error: {error}")
@@ -121,7 +121,7 @@ class SharedContext:
     def store_query(self, key: str, query: str):
         with self._lock:
             self.log(f"[STORE_QUERY] Storing query with key {key}, length: {len(query)}")
-            self.log(f"[STORE_QUERY] Query preview: {query[:200]}...")
+            self.log(f"[STORE_QUERY] Query preview: {query}")
             self.queries[key] = query
 
     def add_error(self, error: str):

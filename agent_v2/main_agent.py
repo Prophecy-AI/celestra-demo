@@ -115,7 +115,7 @@ class MainAgent:
             content = action["content"]
 
             self.log(f"[EXECUTE] Processing action {idx+1}/{len(actions)}: type='{action_type}'")
-            self.log(f"[EXECUTE] Action content: {content[:200]}...")
+            self.log(f"[EXECUTE] Action content: {content}")
 
             if action_type == "think":
                 self.log(f"[EXECUTE-THINK] Processing thinking: {content[:100]}...")
@@ -159,7 +159,7 @@ class MainAgent:
                     self.log(f"[EXECUTE-WAIT] Waiting for task {item['task_id']}...")
                     result = item["future"].result(timeout=30)
                     self.log(f"[EXECUTE-WAIT] Task {item['task_id']} completed successfully")
-                    self.log(f"[EXECUTE-WAIT] Result type: {type(result)}, Result: {str(result)[:200]}...")
+                    self.log(f"[EXECUTE-WAIT] Result type: {type(result)}, Result: {str(result)}")
                 except Exception as e:
                     error_msg = f"Task {item['task_id']} failed: {str(e)}"
                     results["errors"].append(error_msg)
