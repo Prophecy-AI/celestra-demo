@@ -26,12 +26,13 @@ BRIGHT_BLUE = '\033[94m'
 BRIGHT_MAGENTA = '\033[95m'
 BRIGHT_CYAN = '\033[96m'
 
-# Semantic colors for logging - all dimmed for subtlety
-TIMESTAMP = f"{DIM}{GRAY}"
-COMPONENT = f"{DIM}{CYAN}"
-PROCESS = f"{DIM}{BLUE}"
-SUCCESS = f"{DIM}{GREEN}"
-WARNING = f"{DIM}{YELLOW}"
-ERROR = f"{DIM}{RED}"
-DATA = f"{DIM}{MAGENTA}"
-SQL = f"{DIM}{CYAN}"
+# Semantic colors for logging - using bright colors with DIM for better effect
+# DIM works better with bright colors than regular ones
+TIMESTAMP = GRAY  # Gray is already dim
+COMPONENT = f"{DIM}{BRIGHT_CYAN}"
+PROCESS = f"{DIM}{BRIGHT_BLUE}"
+SUCCESS = f"{DIM}{BRIGHT_GREEN}"
+WARNING = f"{DIM}{BRIGHT_YELLOW}"
+ERROR = f"{DIM}{BRIGHT_RED}"
+DATA = f"{DIM}{BRIGHT_MAGENTA}"
+SQL = f"{DIM}{BRIGHT_CYAN}"
