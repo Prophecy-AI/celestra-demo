@@ -26,12 +26,12 @@ BRIGHT_BLUE = '\033[94m'
 BRIGHT_MAGENTA = '\033[95m'
 BRIGHT_CYAN = '\033[96m'
 
-# Semantic colors for logging
-TIMESTAMP = GRAY
-COMPONENT = CYAN
-PROCESS = BRIGHT_BLUE
-SUCCESS = GREEN
-WARNING = YELLOW
-ERROR = RED
-DATA = MAGENTA
-SQL = BRIGHT_CYAN
+# Semantic colors for logging - all dimmed for subtlety
+TIMESTAMP = f"{DIM}{GRAY}"
+COMPONENT = f"{DIM}{CYAN}"
+PROCESS = f"{DIM}{BLUE}"
+SUCCESS = f"{DIM}{GREEN}"
+WARNING = f"{DIM}{YELLOW}"
+ERROR = f"{DIM}{RED}"
+DATA = f"{DIM}{MAGENTA}"
+SQL = f"{DIM}{CYAN}"
