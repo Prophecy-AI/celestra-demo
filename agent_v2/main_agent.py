@@ -302,12 +302,31 @@ Analysis Request: {request}"""
                     continue
 
                 # Process request
+                print("\nProcessing...", end="", flush=True)
                 response, summary = self.process_request(user_input)
-                print(f"\nAssistant: {response}")
+                print(" Complete")
+
+                # Format and display response
+                display_response = self._format_for_display(response)
+                print(f"\n{display_response}")
+
+                # Show results summary if tasks were executed
+                if summary.get("total_tasks", 0) > 0:
+                    print(f"\nResults Summary:")
+                    print(f"  Tasks: {summary.get('completed', 0)} completed, {summary.get('failed', 0)} failed")
+
+                    # Show DataFrame results
+                    if summary.get('dataframes'):
+                        for df_name in summary['dataframes']:
+                            df = self.context.dataframes[df_name]
+                            if df.is_empty():
+                                print(f"  {df_name}: No data found")
+                            else:
+                                print(f"  {df_name}: {len(df)} rows")
 
                 # Show any errors
                 if summary.get("results", {}).get("errors"):
-                    print(f"\n⚠️ Errors occurred:")
+                    print(f"\nErrors occurred:")
                     for error in summary["results"]["errors"]:
                         print(f"  - {error}")
 
@@ -322,6 +341,36 @@ Analysis Request: {request}"""
                 break
             except Exception as e:
                 print(f"\nError: {str(e)}")
+
+    def _format_for_display(self, response: str) -> str:
+        """Format agent response for clean user display"""
+        # Remove think blocks entirely
+        response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
+
+        # Replace agent calls with status messages
+        response = re.sub(r'<rx_claims_agent>.*?</rx_claims_agent>',
+                         '[Querying prescription data...]', response, flags=re.DOTALL)
+        response = re.sub(r'<med_claims_agent>.*?</med_claims_agent>',
+                         '[Querying medical claims...]', response, flags=re.DOTALL)
+        response = re.sub(r'<analysis>.*?</analysis>',
+                         '[Analyzing results...]', response, flags=re.DOTALL)
+
+        # Extract user messages and output
+        user_msg_match = re.search(r'<user_message>(.*?)</user_message>', response, re.DOTALL)
+        output_match = re.search(r'<output>(.*?)</output>', response, re.DOTALL)
+
+        # Build clean output
+        clean_parts = []
+        if user_msg_match:
+            clean_parts.append(user_msg_match.group(1).strip())
+        if output_match:
+            clean_parts.append(output_match.group(1).strip())
+
+        # If no recognizable content, return cleaned response
+        if not clean_parts:
+            return response.strip()
+
+        return '\n\n'.join(clean_parts)
 
     def save_results(self):
         """Save all collected data to files"""
