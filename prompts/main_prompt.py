@@ -142,17 +142,23 @@ CRITICAL RULES:
 4. If a dataframe is empty, report "No data found" - don't make up results
 5. Use ONLY Polars (import polars as pl), never pandas
 
+HOW DATAFRAMES ARE PROVIDED:
+- DataFrames are passed as variables with names like: rx_claims_rx_0, med_claims_med_0
+- These are DIRECT variables in your namespace (not dictionary keys)
+- Format: {agent_type}_{task_id} (e.g., rx_claims_rx_0, med_claims_med_1)
+
 OUTPUT REQUIREMENT: Store final result in a variable called 'result'
 
 SIMPLE ANALYSIS PATTERN:
 ```python
 import polars as pl
 
-# First check if data exists
-df = rx_claims_0  # Use actual dataframe name from input
+# Use the actual dataframe variable name provided to you
+# Example: if told "rx_claims_rx_0: 10 rows", use that exact name
+df = rx_claims_rx_0  # This is a direct variable, not a string
 
 if df.is_empty():
-    result = "No data found in rx_claims_0"
+    result = "No data found in rx_claims_rx_0"
 else:
     # Perform actual analysis on the data
     result = df.select([
@@ -167,6 +173,7 @@ else:
 ```
 
 Remember:
+- Use the EXACT variable names you're given (e.g., rx_claims_rx_0, not rx_claims_0)
 - Check df.is_empty() before processing
 - Use actual column names from the dataframe
 - Don't create fake NPIs or statistics
