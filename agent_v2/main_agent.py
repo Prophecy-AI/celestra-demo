@@ -174,6 +174,22 @@ Analysis Request: {request}"""
         if code_match:
             code = code_match.group(1)
 
+        # Log variables referenced in code vs available
+        if self.debug:
+            import ast
+            try:
+                tree = ast.parse(code)
+                referenced_vars = {node.id for node in ast.walk(tree)
+                                 if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
+                available_vars = set(self.context.dataframes.keys()) | {'pl'}
+                undefined_vars = referenced_vars - available_vars - {'result'}
+
+                if undefined_vars:
+                    self.log(f"[ANALYSIS-WARNING] Code references undefined variables: {undefined_vars}")
+                    self.log(f"[ANALYSIS-WARNING] Available variables: {available_vars}")
+            except SyntaxError:
+                self.log(f"[ANALYSIS-WARNING] Could not parse code for variable check")
+
         # Execute analysis
         try:
             local_vars = dict(self.context.dataframes)
