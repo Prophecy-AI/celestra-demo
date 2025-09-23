@@ -145,28 +145,26 @@ class MainAgent:
 
     def perform_analysis(self, request: str) -> str:
         """Perform analysis on collected data"""
-        # Get all available dataframes
+        # Check if any non-empty data exists
+        non_empty = [k for k, df in self.context.dataframes.items() if not df.is_empty()]
+        if not non_empty:
+            return "No data available - all queries returned empty results"
+
+        # Get available dataframes info
         available_dfs = []
         for key, df in self.context.dataframes.items():
-            if isinstance(df, pl.DataFrame):
-                available_dfs.append(f"{key}: {len(df)} rows, columns: {df.columns}")
+            available_dfs.append(f"{key}: {len(df)} rows, columns: {df.columns}")
 
-        if not available_dfs:
-            return "No data available for analysis"
-
-        # Generate analysis code
-        prompt = f"""Available DataFrames:
+        # Use ANALYSIS_PROMPT to ensure Polars usage
+        prompt = f"""Available DataFrames with actual schemas:
 {chr(10).join(available_dfs)}
 
-Analysis request: {request}
-
-Generate Python code using Polars to perform this analysis.
-The dataframes are available as: {', '.join(self.context.dataframes.keys())}
-Store the final result in a variable called 'result'."""
+Analysis Request: {request}"""
 
         response = self.anthropic_client.messages.create(
             model="claude-3-haiku-20240307",
             max_tokens=2048,
+            system=ANALYSIS_PROMPT,
             messages=[{"role": "user", "content": prompt}],
             temperature=0
         )
@@ -238,8 +236,10 @@ Store the final result in a variable called 'result'."""
 
                 # Continue if data collected but not done
                 if results.get("data_collected") and not all_results["completed"]:
-                    data_keys = list(self.context.dataframes.keys())
-                    prompt = f"Data collected in {data_keys}. Continue with your plan or use <output> to finish."
+                    data_info = []
+                    for key, df in self.context.dataframes.items():
+                        data_info.append(f"{key}: {len(df)} rows" if not df.is_empty() else f"{key}: EMPTY")
+                    prompt = f"Data collected: {data_info}. Continue with your plan or use <output> to finish."
                     self.context.conversation_history.append({"role": "user", "content": prompt})
                     self.log(f"[PROCESS] Prompting to continue with collected data")
                 elif not results.get("data_collected") and not all_results["completed"]:
