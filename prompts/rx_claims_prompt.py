@@ -1,8 +1,3 @@
-import os
-from openai import OpenAI
-from dotenv import load_dotenv
-
-load_dotenv()
 
 RX_CLAIMS_DATA_DICTIONARY = """
 RX_CLAIMS TABLE COLUMNS (BigQuery Standard SQL):
@@ -10,7 +5,7 @@ RX_CLAIMS TABLE COLUMNS (BigQuery Standard SQL):
 - PRESCRIBER_NPI_NM: STRING - Name of the prescribing physician
 - PRESCRIBER_NPI_HCP_SEGMENT_DESC: STRING - Healthcare provider segment description for the prescriber
 - PRESCRIBER_NPI_STATE_CD: STRING - State code where the prescriber is located
-- PRESCRIBER_NPI_ZIP_CD: STRING - Five-digit ZIP code of the prescriber's location
+- PRESCRIBER_NPI_ZIP5_CD: STRING - Five-digit ZIP code of the prescriber's location
 - RX_ANCHOR_DD: DATE - Anchor date for the prescription transaction (YYYY-MM-DD format)
 - SERVICE_DATE_DD: DATE - Date when the pharmacy service was provided (YYYY-MM-DD format)
 - DATE_PRESCRIPTION_WRITTEN_DD: DATE - Date when the prescription was written by the provider (YYYY-MM-DD format)
@@ -81,6 +76,13 @@ KEY ANALYSIS PATTERNS:
 - Geographic analysis using PRESCRIBER_NPI_STATE_CD
 - Payer analysis using PAYER_* fields
 - Drug analysis using NDC_* fields
+
+DRUG NAME SEARCH STRATEGY:
+- For BRAND NAMES (Humira, Enbrel, Stelara): Search NDC_PREFERRED_BRAND_NM and NDC_IMPLIED_BRAND_NM
+- For GENERIC NAMES (adalimumab, etanercept): Search NDC_GENERIC_NM
+- For UNCERTAIN NAMES: Search multiple drug fields with LIKE patterns
+- Always use LIKE '%drugname%' for partial matching
+- Consider both brand and generic variations when possible
 
 BIGQUERY BEST PRACTICES:
 1. Use proper date filtering with DATE literals: DATE('2024-01-01')
@@ -171,6 +173,16 @@ WHERE TOTAL_PAID_AMT > 0 AND PRESCRIBER_NPI_STATE_CD IS NOT NULL
 GROUP BY state
 ORDER BY avg_total_cost DESC
 
+For "Doctors prescribing Humira":
+SELECT 
+  PRESCRIBER_NPI_NBR,
+  COUNT(*) as prescription_count
+FROM `unique-bonbon-472921-q8.Claims.rx_claims`
+WHERE (NDC_PREFERRED_BRAND_NM LIKE '%Humira%' OR NDC_IMPLIED_BRAND_NM LIKE '%Humira%' OR NDC_GENERIC_NM LIKE '%adalimumab%')
+  AND PRESCRIBER_NPI_NBR IS NOT NULL
+GROUP BY PRESCRIBER_NPI_NBR
+ORDER BY prescription_count DESC
+
 For "Doctors with majority CVS Health patients":
 WITH doctor_payer_counts AS (
   SELECT 
@@ -199,33 +211,3 @@ WHERE d.PAYER_PAYER_NM = 'CVS Health'
 ORDER BY cvs_percentage DESC
 """
 
-class SQLPlannerPrompt:
-    def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    
-    def generate_sql(self, query: str) -> str:
-        response = self.client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": query}
-            ],
-            temperature=0.1
-        )
-        return response.choices[0].message.content
-
-if __name__ == "__main__":
-    planner = SQLPlannerPrompt()
-    while True:
-        user_query = input("Enter your query (or 'quit' to exit): ")
-        if user_query.lower() == 'quit':
-            break
-        
-        try:
-            sql = planner.generate_sql(user_query)
-            print("\nGenerated BigQuery SQL:")
-            print("=" * 50)
-            print(sql)
-            print("=" * 50)
-        except Exception as e:
-            print(f"Error generating SQL: {e}")
