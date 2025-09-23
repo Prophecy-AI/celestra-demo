@@ -28,7 +28,7 @@ BRIGHT_CYAN = '\033[96m'
 
 # Semantic colors for logging - using bright colors with DIM for better effect
 # DIM works better with bright colors than regular ones
-TIMESTAMP = GRAY  # Gray is already dim
+TIMESTAMP = f"{DIM}{GRAY}"  # Gray is already dim
 COMPONENT = f"{DIM}{BRIGHT_CYAN}"
 PROCESS = f"{DIM}{BRIGHT_BLUE}"
 SUCCESS = f"{DIM}{BRIGHT_GREEN}"
