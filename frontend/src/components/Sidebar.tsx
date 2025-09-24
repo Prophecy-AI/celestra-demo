@@ -27,7 +27,7 @@ export default function Sidebar() {
           <span className="text-white text-xl font-semibold">Celestra</span>
         </div>
       </div>
-      <nav className="flex flex-1 flex-col px-6 py-6">
+      <nav className="flex flex-1 flex-col px-4 py-4">
         <ul role="list" className="flex flex-1 flex-col gap-y-2">
           {navigation.map((item) => (
             <li key={item.name}>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 
@@ -42,6 +42,7 @@ const availableClusters: Cluster[] = [
 
 export default function ExplorePage() {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [visibleMessages, setVisibleMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [selectedClusters, setSelectedClusters] = useState<string[]>([]);
   const [isClusterDropdownOpen, setIsClusterDropdownOpen] = useState(false);
@@ -55,10 +56,96 @@ export default function ExplorePage() {
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingMessageRef = useRef<string>('');
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const messageRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom when new messages arrive or streaming updates
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({
+        behavior: smooth ? 'smooth' : 'auto',
+        block: 'end'
+      });
+    }
+  }, []);
+
+  // Scroll to bottom when messages change or streaming content updates
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Use requestAnimationFrame to ensure DOM is updated before scrolling
+    requestAnimationFrame(() => {
+      scrollToBottom();
+    });
+  }, [messages, currentStreamingMessage, scrollToBottom]);
+
+  // Force scroll when visible messages change
+  useEffect(() => {
+    if (visibleMessages.length > 0) {
+      requestAnimationFrame(() => {
+        scrollToBottom(true);
+      });
+    }
+  }, [visibleMessages, scrollToBottom]);
+
+  // Initialize Intersection Observer for lazy loading
+  useEffect(() => {
+    if (!observerRef.current) {
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              const messageId = entry.target.getAttribute('data-message-id');
+              if (messageId) {
+                setVisibleMessages((prev) => {
+                  const message = messages.find((m) => m.id === messageId);
+                  if (message && !prev.some((m) => m.id === messageId)) {
+                    return [...prev, message].sort((a, b) =>
+                      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                    );
+                  }
+                  return prev;
+                });
+              }
+            }
+          });
+        },
+        {
+          root: chatContainerRef.current,
+          rootMargin: '100px',
+          threshold: 0.01
+        }
+      );
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [messages]);
+
+  // Update visible messages when messages change
+  useEffect(() => {
+    // Start with showing recent messages (last 10)
+    const recentMessages = messages.slice(-10);
+    setVisibleMessages(recentMessages);
+
+    // Observe all message placeholders
+    messages.forEach((message) => {
+      const element = messageRefsMap.current.get(message.id);
+      if (element && observerRef.current) {
+        observerRef.current.observe(element);
+      }
+    });
+
+    return () => {
+      // Clean up observers
+      messageRefsMap.current.forEach((element) => {
+        if (observerRef.current) {
+          observerRef.current.unobserve(element);
+        }
+      });
+    };
   }, [messages]);
 
   // WebSocket connection
@@ -199,7 +286,7 @@ export default function ExplorePage() {
 
   const addMessage = (type: Message['type'], content: string) => {
     setMessages(prev => [...prev, {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
       content,
       timestamp: new Date()
@@ -286,56 +373,49 @@ export default function ExplorePage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         <main className="flex-1 flex flex-col overflow-hidden">
-            {/* Connection Status Bar */}
-            <div className="bg-white border-b border-gray-200 px-6 py-3">
-              <div className="flex items-center justify-between max-w-4xl mx-auto">
-                <div className="flex items-center space-x-4">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    connected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                    <span className={`w-2 h-2 mr-1 rounded-full ${
-                      connected ? 'bg-green-400' : 'bg-red-400'
-                    }`} />
-                    {connected ? 'Connected' : 'Disconnected'}
-                  </span>
-                  {sessionId && (
-                    <span className="text-xs text-gray-500">Session: {sessionId.slice(0, 8)}</span>
-                  )}
-                </div>
-                {connected && (
-                  <div className="flex items-center space-x-2">
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      serverState === ServerState.IDLE ? 'bg-green-100 text-green-700' :
-                      serverState === ServerState.PROCESSING ? 'bg-yellow-100 text-yellow-700' :
-                      serverState === ServerState.STREAMING ? 'bg-blue-100 text-blue-700' :
-                      'bg-purple-100 text-purple-700'
-                    }`}>
-                      {serverState === ServerState.PROCESSING ? '⚡ Processing...' :
-                       serverState === ServerState.STREAMING ? '📝 Receiving...' :
-                       serverState === ServerState.WAITING_INPUT ? '❓ Waiting for input...' :
-                       '✅ Ready'}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6" ref={chatContainerRef}>
               <div className="max-w-4xl mx-auto space-y-4">
                 {messages.length === 0 && connected && (
                   <div className="text-center py-8">
                     <p className="text-gray-500">Connected to Healthcare Data Agent. Start by asking a question or selecting clusters to analyze.</p>
                   </div>
                 )}
-                {messages.map((message) => (
+                {messages.map((message, index) => {
+                  const isVisible = visibleMessages.some((m) => m.id === message.id);
+
+                  // Create a placeholder for non-visible messages with parallax effect
+                  if (!isVisible) {
+                    return (
+                      <div
+                        key={message.id}
+                        data-message-id={message.id}
+                        ref={(el) => {
+                          if (el) messageRefsMap.current.set(message.id, el);
+                        }}
+                        className="h-20 flex items-center justify-center opacity-0 animate-fadeIn"
+                        style={{
+                          animationDelay: `${index * 50}ms`,
+                          animationFillMode: 'forwards'
+                        }}
+                      >
+                        <div className="animate-pulse bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 rounded-lg h-12 w-3/4 shadow-sm"></div>
+                      </div>
+                    );
+                  }
+
+                  return (
                   <div
                     key={message.id}
                     className={`flex ${
                       message.type === 'user' ? 'justify-end' :
                       message.type === 'system' || message.type === 'error' ? 'justify-center' :
                       'justify-start'
-                    }`}
+                    } opacity-0 animate-slideInUp`}
+                    style={{
+                      animationDelay: `${Math.min(index * 30, 300)}ms`,
+                      animationFillMode: 'forwards'
+                    }}
                   >
                     <div
                       className={`max-w-3xl px-4 py-3 rounded-lg ${
@@ -357,27 +437,48 @@ export default function ExplorePage() {
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
 
-                {/* Show processing bubbles */}
+                {/* Show processing bubbles with fade-in animation */}
                 {serverState === ServerState.PROCESSING && (
-                  <div className="flex justify-start">
-                    <div className="bg-white border border-gray-200 px-4 py-3 rounded-lg">
+                  <div className="flex justify-start opacity-0 animate-fadeIn" style={{ animationDelay: '100ms', animationFillMode: 'forwards' }}>
+                    <div className="bg-white border border-gray-200 px-4 py-3 rounded-lg shadow-sm">
                       <div className="flex items-center space-x-2">
                         <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                          <div
+                            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                            style={{
+                              marginTop: '3px',
+                              animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)'
+                            }}
+                          ></div>
+                          <div
+                            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                            style={{
+                              marginTop: '3px',
+                              animationDelay: '0.1s',
+                              animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)'
+                            }}
+                          ></div>
+                          <div
+                            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                            style={{
+                              marginTop: '3px',
+                              animationDelay: '0.2s',
+                              animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)'
+                            }}
+                          ></div>
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Show streaming message in progress */}
+                {/* Show streaming message in progress with fade-in */}
                 {serverState === ServerState.STREAMING && currentStreamingMessage && (
-                  <div className="flex justify-start">
-                    <div className="max-w-3xl px-4 py-3 rounded-lg bg-white border border-gray-200 text-gray-900">
+                  <div className="flex justify-start opacity-0 animate-fadeIn" style={{ animationDelay: '50ms', animationFillMode: 'forwards' }}>
+                    <div className="max-w-3xl px-4 py-3 rounded-lg bg-white border border-gray-200 text-gray-900 shadow-sm transition-all duration-200">
                       <p className="text-sm whitespace-pre-wrap">{currentStreamingMessage}</p>
                       <p className="text-xs mt-2 text-gray-500">
                         {new Date().toLocaleTimeString()}
