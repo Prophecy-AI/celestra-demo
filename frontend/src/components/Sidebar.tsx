@@ -14,7 +14,7 @@ export default function Sidebar() {
 
   return (
     <div className="flex h-full w-64 flex-col bg-black">
-      <div className="flex h-16 shrink-0 items-center px-5 py-10">
+      <div className="flex h-16 shrink-0 items-center px-5 py-9">
         <div className="flex items-center space-x-3">
           <div className="h-8 w-8 bg-white rounded-sm flex items-center justify-center">
             <div className="grid grid-cols-2 gap-0.5">
