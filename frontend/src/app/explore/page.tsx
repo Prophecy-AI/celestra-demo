@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 
 interface Message {
   id: string;
-  type: 'user' | 'assistant';
+  type: 'user' | 'assistant' | 'system' | 'error' | 'prompt';
   content: string;
   timestamp: Date;
 }
@@ -15,6 +15,13 @@ interface Cluster {
   id: string;
   name: string;
   size: number;
+}
+
+enum ServerState {
+  IDLE = 'idle',
+  PROCESSING = 'processing',
+  STREAMING = 'streaming',
+  WAITING_INPUT = 'waiting_input'
 }
 
 const availableClusters: Cluster[] = [
@@ -27,45 +34,158 @@ const availableClusters: Cluster[] = [
 ];
 
 export default function ExplorePage() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      type: 'assistant',
-      content: 'Hello! I can help you analyze existing clusters or explore new HCP segments. What would you like to explore today?',
-      timestamp: new Date()
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [selectedClusters, setSelectedClusters] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isClusterDropdownOpen, setIsClusterDropdownOpen] = useState(false);
+  const [serverState, setServerState] = useState<ServerState>(ServerState.IDLE);
+  const [connected, setConnected] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [currentStreamingMessage, setCurrentStreamingMessage] = useState<string>('');
+
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // WebSocket connection
+  useEffect(() => {
+    const ws = new WebSocket('ws://localhost:8765');
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('Connected to WebSocket server');
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      handleWebSocketMessage(data);
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setConnected(false);
+      addMessage('system', '❌ Connection error. Please refresh the page.');
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket closed');
+      setConnected(false);
+      addMessage('system', '🔌 Disconnected from server');
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, []);
+
+  const handleWebSocketMessage = (data: any) => {
+    switch (data.type) {
+      case 'status':
+        if (data.state === 'connected') {
+          setConnected(true);
+          setSessionId(data.session_id);
+          addMessage('system', '✅ Connected to Healthcare Data Agent');
+        } else if (data.state === 'complete') {
+          addMessage('system', '✅ Analysis complete');
+        }
+        break;
+
+      case 'state':
+        const newState = data.value as ServerState;
+        const previousState = serverState;
+        setServerState(newState);
+
+        // When transitioning from STREAMING to another state, finalize the streaming message
+        if (previousState === ServerState.STREAMING && newState !== ServerState.STREAMING && currentStreamingMessage) {
+          addMessage('assistant', currentStreamingMessage);
+          setCurrentStreamingMessage('');
+        }
+        break;
+
+      case 'output':
+        // Remove "You: " or "Assistant: " prefixes from the text
+        let cleanText: string = data.text;
+        cleanText = cleanText.trim();
+        const assistantPrefix = '💬';
+        const youPrefix = '👤';
+        if (cleanText.startsWith(youPrefix)) {
+          cleanText = cleanText.substring("👤 You: ".length);
+          // Ignore user echoes from server
+        } else if (cleanText.startsWith(assistantPrefix)) {
+          cleanText = cleanText.substring("💬 Assistant: ".length);
+        }
+
+        // If we're streaming, accumulate messages
+        if (serverState === ServerState.STREAMING || serverState === ServerState.PROCESSING) {
+          setCurrentStreamingMessage(prev => prev + (prev ? '\n' : '') + cleanText);
+        } else {
+          // Not streaming, add as individual message
+          if (cleanText) addMessage('assistant', cleanText);
+        }
+        break;
+
+      case 'prompt':
+        //addMessage('prompt', data.text);
+        break;
+
+      case 'error':
+        addMessage('error', `Error: ${data.text}`);
+        break;
+
+      case 'log':
+        console.log('Debug:', data.text);
+        break;
+    }
+  };
+
+  const addMessage = (type: Message['type'], content: string) => {
+    setMessages(prev => [...prev, {
+      id: Date.now().toString(),
+      type,
+      content,
+      timestamp: new Date()
+    }]);
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: inputMessage,
-      timestamp: new Date()
-    };
+    // Check if we can send
+    const canSend = serverState === ServerState.IDLE ||
+                    serverState === ServerState.WAITING_INPUT;
 
-    setMessages(prev => [...prev, userMessage]);
+    if (!canSend) {
+      addMessage('system', `⚠️ Cannot send - server is ${serverState}`);
+      return;
+    }
+
+    // Add user message to display
+    addMessage('user', inputMessage);
+
+    // Include cluster context if any selected
+    let messageToSend = inputMessage;
+    if (selectedClusters.length > 0) {
+      const clusterNames = selectedClusters.map(id => {
+        const cluster = availableClusters.find(c => c.id === id);
+        return cluster?.name;
+      }).filter(Boolean).join(', ');
+
+      messageToSend = `${inputMessage} [Context: Analyzing clusters: ${clusterNames}]`;
+    }
+
+    // Send to server
+    wsRef.current?.send(JSON.stringify({
+      type: 'message',
+      text: messageToSend
+    }));
+
     setInputMessage('');
-    setIsLoading(true);
-
-    setTimeout(() => {
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'assistant',
-        content: `I understand you're interested in "${inputMessage}". Let me analyze that for you. Based on the selected clusters and current data, here are some insights...`,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, assistantMessage]);
-      setIsLoading(false);
-    }, 1500);
   };
 
   const toggleClusterSelection = (clusterId: string) => {
@@ -77,6 +197,10 @@ export default function ExplorePage() {
   };
 
   const handleQuickAction = (action: string) => {
+    if (!connected || (serverState !== ServerState.IDLE && serverState !== ServerState.WAITING_INPUT)) {
+      addMessage('system', '⚠️ Cannot send - server is not ready');
+      return;
+    }
     setInputMessage(action);
   };
 
@@ -108,32 +232,81 @@ export default function ExplorePage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         <main className="flex-1 flex flex-col overflow-hidden">
+            {/* Connection Status Bar */}
+            <div className="bg-white border-b border-gray-200 px-6 py-3">
+              <div className="flex items-center justify-between max-w-4xl mx-auto">
+                <div className="flex items-center space-x-4">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    connected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    <span className={`w-2 h-2 mr-1 rounded-full ${
+                      connected ? 'bg-green-400' : 'bg-red-400'
+                    }`} />
+                    {connected ? 'Connected' : 'Disconnected'}
+                  </span>
+                  {sessionId && (
+                    <span className="text-xs text-gray-500">Session: {sessionId.slice(0, 8)}</span>
+                  )}
+                </div>
+                {connected && (
+                  <div className="flex items-center space-x-2">
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      serverState === ServerState.IDLE ? 'bg-green-100 text-green-700' :
+                      serverState === ServerState.PROCESSING ? 'bg-yellow-100 text-yellow-700' :
+                      serverState === ServerState.STREAMING ? 'bg-blue-100 text-blue-700' :
+                      'bg-purple-100 text-purple-700'
+                    }`}>
+                      {serverState === ServerState.PROCESSING ? '⚡ Processing...' :
+                       serverState === ServerState.STREAMING ? '📝 Receiving...' :
+                       serverState === ServerState.WAITING_INPUT ? '❓ Waiting for input...' :
+                       '✅ Ready'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto p-6">
               <div className="max-w-4xl mx-auto space-y-4">
+                {messages.length === 0 && connected && (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">Connected to Healthcare Data Agent. Start by asking a question or selecting clusters to analyze.</p>
+                  </div>
+                )}
                 {messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                    className={`flex ${
+                      message.type === 'user' ? 'justify-end' :
+                      message.type === 'system' || message.type === 'error' ? 'justify-center' :
+                      'justify-start'
+                    }`}
                   >
                     <div
                       className={`max-w-3xl px-4 py-3 rounded-lg ${
-                        message.type === 'user'
-                          ? 'bg-black text-white'
-                          : 'bg-white border border-gray-200 text-gray-900'
+                        message.type === 'user' ? 'bg-black text-white' :
+                        message.type === 'assistant' ? 'bg-white border border-gray-200 text-gray-900' :
+                        message.type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
+                        message.type === 'prompt' ? 'bg-amber-50 border border-amber-200 text-amber-900' :
+                        message.type === 'system' ? 'bg-gray-100 text-gray-600 text-sm' :
+                        'bg-white border border-gray-200 text-gray-900'
                       }`}
                     >
-                      <p className="text-sm">{message.content}</p>
-                      <p className={`text-xs mt-2 ${
-                        message.type === 'user' ? 'text-gray-300' : 'text-gray-500'
-                      }`}>
-                        {message.timestamp.toLocaleTimeString()}
-                      </p>
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      {message.type !== 'system' && (
+                        <p className={`text-xs mt-2 ${
+                          message.type === 'user' ? 'text-gray-300' : 'text-gray-500'
+                        }`}>
+                          {message.timestamp.toLocaleTimeString()}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
-                
-                {isLoading && (
+
+                {/* Show processing bubbles */}
+                {serverState === ServerState.PROCESSING && (
                   <div className="flex justify-start">
                     <div className="bg-white border border-gray-200 px-4 py-3 rounded-lg">
                       <div className="flex items-center space-x-2">
@@ -142,11 +315,24 @@ export default function ExplorePage() {
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
                         </div>
-                        <span className="text-sm text-gray-500">Analyzing...</span>
                       </div>
                     </div>
                   </div>
                 )}
+
+                {/* Show streaming message in progress */}
+                {serverState === ServerState.STREAMING && currentStreamingMessage && (
+                  <div className="flex justify-start">
+                    <div className="max-w-3xl px-4 py-3 rounded-lg bg-white border border-gray-200 text-gray-900">
+                      <p className="text-sm whitespace-pre-wrap">{currentStreamingMessage}</p>
+                      <p className="text-xs mt-2 text-gray-500">
+                        {new Date().toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
               </div>
             </div>
 
@@ -293,16 +479,22 @@ export default function ExplorePage() {
                     type="text"
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
-                    placeholder="Ask me anything about your HCP clusters..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage(e);
+                      }
+                    }}
+                    placeholder={connected ? "Ask me anything about healthcare data..." : "Not connected..."}
                     className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent text-sm"
-                    disabled={isLoading}
+                    disabled={!connected || (serverState !== ServerState.IDLE && serverState !== ServerState.WAITING_INPUT)}
                   />
                   <button
                     type="submit"
-                    disabled={!inputMessage.trim() || isLoading}
+                    disabled={!connected || !inputMessage.trim() || (serverState !== ServerState.IDLE && serverState !== ServerState.WAITING_INPUT)}
                     className="px-6 py-3 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    Send
+                    {!connected ? 'Offline' : 'Send'}
                   </button>
                 </form>
               </div>
