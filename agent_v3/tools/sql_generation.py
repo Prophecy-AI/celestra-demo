@@ -80,7 +80,7 @@ OUTPUT FORMAT:
             return ToolResult(success=False, data={}, error=error)
 
         request = parameters["request"]
-        tool_log("text_to_sql_rx", f"Request: {request[:100]}...")
+        tool_log("text_to_sql_rx", f"Request: {request}...")
 
         try:
             # Call LLM to generate SQL
@@ -113,7 +113,7 @@ OUTPUT FORMAT:
             # Extract estimated scope from the SQL
             scope = self._extract_scope(sql, request)
             tool_log("text_to_sql_rx", f"SQL generated ({len(sql)} chars), scope: {scope}", "success")
-            tool_log("text_to_sql_rx", f"SQL: {sql[:200]}...", "sql")
+            tool_log("text_to_sql_rx", f"SQL: {sql}...", "sql")
 
             return ToolResult(
                 success=True,
@@ -257,7 +257,7 @@ OUTPUT FORMAT:
             return ToolResult(success=False, data={}, error=error)
 
         request = parameters["request"]
-        tool_log("text_to_sql_rx", f"Request: {request[:100]}...")
+        tool_log("text_to_sql_rx", f"Request: {request}...")
 
         try:
             # Call LLM to generate SQL
@@ -290,7 +290,7 @@ OUTPUT FORMAT:
             # Extract estimated scope from the SQL
             scope = self._extract_scope(sql, request)
             tool_log("text_to_sql_rx", f"SQL generated ({len(sql)} chars), scope: {scope}", "success")
-            tool_log("text_to_sql_rx", f"SQL: {sql[:200]}...", "sql")
+            tool_log("text_to_sql_rx", f"SQL: {sql}...", "sql")
 
             return ToolResult(
                 success=True,
