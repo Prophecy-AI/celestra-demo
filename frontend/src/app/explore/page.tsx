@@ -46,6 +46,7 @@ export default function ExplorePage() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const streamingMessageRef = useRef<string>('');
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -84,48 +85,67 @@ export default function ExplorePage() {
   }, []);
 
   const handleWebSocketMessage = (data: any) => {
+    console.log('📨 WS Message:', data.type, data);
+
     switch (data.type) {
       case 'status':
+        console.log('📊 Status message:', data.state);
         if (data.state === 'connected') {
           setConnected(true);
           setSessionId(data.session_id);
           addMessage('system', '✅ Connected to Healthcare Data Agent');
         } else if (data.state === 'complete') {
+          // Finalize any pending streaming message when complete
+          console.log('✅ Complete status - current streaming msg:', streamingMessageRef.current);
+          if (streamingMessageRef.current) {
+            addMessage('assistant', streamingMessageRef.current);
+            streamingMessageRef.current = '';
+            setCurrentStreamingMessage('');
+          }
           addMessage('system', '✅ Analysis complete');
         }
         break;
 
       case 'state':
         const newState = data.value as ServerState;
-        const previousState = serverState;
+        console.log(`🔄 State change: ${serverState} -> ${newState}`);
+        console.log('📝 Current streaming message ref:', streamingMessageRef.current.length);
         setServerState(newState);
 
-        // When transitioning from STREAMING to another state, finalize the streaming message
-        if (previousState === ServerState.STREAMING && newState !== ServerState.STREAMING && currentStreamingMessage) {
-          addMessage('assistant', currentStreamingMessage);
-          setCurrentStreamingMessage('');
+        // Only finalize streaming message when moving to IDLE or WAITING_INPUT
+        if (newState === ServerState.IDLE || newState === ServerState.WAITING_INPUT) {
+          console.log('📌 Finalizing message on state:', newState, 'Message:', streamingMessageRef.current);
+          if (streamingMessageRef.current) {
+            addMessage('assistant', streamingMessageRef.current);
+            streamingMessageRef.current = '';
+            setCurrentStreamingMessage('');
+          }
         }
         break;
 
       case 'output':
+        console.log('💬 Output received:', data.text);
         // Remove "You: " or "Assistant: " prefixes from the text
         let cleanText: string = data.text;
         cleanText = cleanText.trim();
         const assistantPrefix = '💬';
         const youPrefix = '👤';
         if (cleanText.startsWith(youPrefix)) {
+          console.log('👤 Ignoring user echo');
           cleanText = cleanText.substring("👤 You: ".length);
           // Ignore user echoes from server
         } else if (cleanText.startsWith(assistantPrefix)) {
+          console.log('🤖 Cleaning assistant prefix');
           cleanText = cleanText.substring("💬 Assistant: ".length);
         }
 
-        // If we're streaming, accumulate messages
-        if (serverState === ServerState.STREAMING || serverState === ServerState.PROCESSING) {
-          setCurrentStreamingMessage(prev => prev + (prev ? '\n' : '') + cleanText);
-        } else {
-          // Not streaming, add as individual message
-          if (cleanText) addMessage('assistant', cleanText);
+        // Always accumulate during non-idle states
+        if (cleanText) {
+          console.log('📝 Accumulating text:', cleanText);
+          console.log('📊 Current server state:', serverState);
+          streamingMessageRef.current += (streamingMessageRef.current ? '\n' : '') + cleanText;
+          setCurrentStreamingMessage(streamingMessageRef.current);
+          console.log('📄 New streaming message ref length:', streamingMessageRef.current.length);
         }
         break;
 
