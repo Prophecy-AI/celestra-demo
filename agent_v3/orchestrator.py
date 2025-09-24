@@ -37,7 +37,7 @@ class RecursiveOrchestrator:
         Returns:
             Dictionary with final results and context
         """
-        self.log(f"Starting orchestration with input: {initial_input[:100]}...")
+        self.log(f"Starting orchestration with input: {initial_input}")
 
         # Add initial user input to context
         self.context.add_user_message(initial_input)
