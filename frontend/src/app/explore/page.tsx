@@ -159,12 +159,22 @@ export default function ExplorePage() {
           for (const match of matches) {
             const [_, fullPath, sessionPart, filename] = match;
             console.log('📁 Found CSV:', fullPath);
-            setDatasets(prev => [...prev, {
-              sessionId: sessionPart,
-              filename: filename,
-              path: fullPath,
-              timestamp: new Date()
-            }]);
+            setDatasets(prev => {
+              // Check if this dataset already exists
+              const exists = prev.some(d =>
+                d.sessionId === sessionPart && d.filename === filename
+              );
+
+              if (!exists) {
+                return [...prev, {
+                  sessionId: sessionPart,
+                  filename: filename,
+                  path: fullPath,
+                  timestamp: new Date()
+                }];
+              }
+              return prev;
+            });
           }
 
           streamingMessageRef.current += (streamingMessageRef.current ? '\n' : '') + cleanText;
