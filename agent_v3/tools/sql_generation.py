@@ -70,7 +70,7 @@ OUTPUT FORMAT:
 - Return clean, executable BigQuery Standard SQL
 - Include appropriate GROUP BY when using aggregations
 - Add ORDER BY for meaningful result ordering
-- LIMIT results appropriately (typically 100-1000 rows)
+- LIMIT results to 1,000,000 (1M) rows
 """
 
     def execute(self, parameters: Dict[str, Any], context: Any) -> ToolResult:
@@ -247,7 +247,7 @@ OUTPUT FORMAT:
 - Return clean, executable BigQuery Standard SQL
 - Include appropriate GROUP BY when using aggregations
 - Add ORDER BY for meaningful result ordering
-- LIMIT results appropriately (typically 100-1000 rows)
+- LIMIT results to 1,000,000 (1M) rows
 """
 
     def execute(self, parameters: Dict[str, Any], context: Any) -> ToolResult:
