@@ -19,8 +19,9 @@ from prompts.med_claims_prompt import SYSTEM_PROMPT as MED_CLAIMS_PROMPT
 load_dotenv()
 
 class MedClaimsAgent:
-    def __init__(self, context: SharedContext):
+    def __init__(self, context: SharedContext, session_id: str):
         self.context = context
+        self.session_id = session_id
         self.bq_client = bigquery.Client(project=os.getenv("GCP_PROJECT"))
         self.anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         # Dataset is hardcoded in the med_claims_prompt.py already
@@ -52,15 +53,26 @@ class MedClaimsAgent:
         self.log(f"[SQL-GEN] Using system prompt of length: {len(MED_CLAIMS_PROMPT)}")
 
         response = self.anthropic_client.messages.create(
-            model="claude-3-haiku-20240307",
-            max_tokens=1024,
+            model="claude-sonnet-4-20250514",
+            max_tokens=4096,
+            temperature=0,
             system=MED_CLAIMS_PROMPT,
             messages=[{"role": "user", "content": request}],
-            temperature=0
         )
 
-        sql = response.content[0].text.strip()
-        sql = sql.replace("```sql", "").replace("```", "").strip()
+        # Extract text content from response (skip thinking blocks)
+        sql = ""
+        for block in response.content:
+            if hasattr(block, 'type'):
+                if block.type == 'thinking':
+                    self.log(f"[SQL-THINKING] Model thinking: {block.thinking[:200]}...")
+                elif block.type == 'text':
+                    sql += block.text
+            else:
+                # Fallback for simple text response
+                sql = block.text if hasattr(block, 'text') else str(block)
+
+        sql = sql.strip().replace("```sql", "").replace("```", "").strip()
 
         self.log(f"[SQL-GEN] Generated SQL: {sql}")
         return sql
@@ -95,20 +107,57 @@ class MedClaimsAgent:
             self.log(f"[EXECUTE] Query completed")
 
             # Convert to Polars DataFrame
-            rows = list(results)
+            rows = results.to_arrow()
+            df = pl.from_arrow(rows)
             self.log(f"[EXECUTE] Retrieved {len(rows)} rows from BigQuery")
 
-            if rows:
-                df = pl.DataFrame([dict(row) for row in rows])
+            if not df.is_empty():
                 self.log(f"[EXECUTE] Created DataFrame with shape: {df.shape}")
                 self.log(f"[EXECUTE] DataFrame columns: {df.columns}")
             else:
-                df = pl.DataFrame()
                 self.log(f"[EXECUTE] Created empty DataFrame (no results)")
 
             # Store result
             self.context.store_dataframe(f"med_claims_{task_id}", df)
             self.log(f"[EXECUTE] DataFrame stored with key: med_claims_{task_id}")
+
+            # Save to CSV with LLM-generated descriptive name
+            if not df.is_empty():
+                try:
+                    output_dir = f"output/session_{self.session_id}"
+                    os.makedirs(output_dir, exist_ok=True)
+
+                    # Generate descriptive filename using task request
+                    prompt = f"""Generate a short descriptive CSV filename (3-5 words, use underscores).
+Task request: {request[:200]}
+Data columns: {df.columns[:5]}
+Row count: {len(df)}
+Reply with ONLY the filename without .csv extension"""
+
+                    try:
+                        response = self.anthropic_client.messages.create(
+                            model="claude-4-sonnet-20250514",
+                            max_tokens=50,
+                            messages=[{"role": "user", "content": prompt}],
+                            temperature=0
+                        )
+
+                        suggested_name = response.content[0].text.strip().lower().replace(" ", "_").replace("-", "_")
+                        suggested_name = suggested_name.replace(".csv", "")
+                        suggested_name = "".join(c for c in suggested_name if c.isalnum() or c == "_")
+
+                        file_name = f"med_{task_id}_{suggested_name}.csv"
+                        self.log(f"[EXECUTE] Generated filename: {file_name}")
+                    except Exception as e:
+                        self.log(f"[EXECUTE] Error generating filename: {e}")
+                        file_name = f"med_{task_id}.csv"
+
+                    file_path = f"{output_dir}/{file_name}"
+                    df.write_csv(file_path)
+                    self.log(f"[EXECUTE] Saved CSV to: {file_path}")
+
+                except Exception as e:
+                    self.log(f"[EXECUTE] Error saving CSV: {e}")
 
             self.context.update_task(task_id, TaskStatus.COMPLETED, result=f"Found {len(df)} rows")
             self.log(f"[EXECUTE] Task {task_id} completed successfully with {len(df)} rows")

@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 import anthropic
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from prompts.main_prompt import MAIN_AGENT_SYSTEM_PROMPT, ANALYSIS_PROMPT
+from prompts.main_prompt import MAIN_AGENT_SYSTEM_PROMPT
 
 from .context import SharedContext, TaskStatus
 from .rx_claims_agent import RXClaimsAgent
@@ -27,16 +27,23 @@ class MainAgent:
     def __init__(self):
         self.context = SharedContext()
         self.anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.rx_agent = RXClaimsAgent(self.context)
-        self.med_agent = MedClaimsAgent(self.context)
-        self.executor = ThreadPoolExecutor(max_workers=3)
         self.session_id = time.strftime("%Y%m%d_%H%M%S")
+        self.rx_agent = RXClaimsAgent(self.context, self.session_id)
+        self.med_agent = MedClaimsAgent(self.context, self.session_id)
+        self.executor = ThreadPoolExecutor(max_workers=3)
         self.debug = os.getenv('DEBUG', '0') == '1'
+        self.all_logs = []  # Store all logs for later saving
+        self.api_calls = []  # Store all API calls for logging
 
     def log(self, message: str):
         """Colored debug logging"""
+        timestamp_str = time.strftime('%H:%M:%S')
+
+        # Store raw log with timestamp
+        self.all_logs.append(f"[{timestamp_str}] [MAIN-AGENT] {message}")
+
         if self.debug:
-            timestamp = f"{TIMESTAMP}[{time.strftime('%H:%M:%S')}]{RESET}"
+            timestamp = f"{TIMESTAMP}[{timestamp_str}]{RESET}"
 
             # Color based on log content patterns
             if "ERROR" in message or "failed" in message.lower():
@@ -71,11 +78,9 @@ class MainAgent:
 
         # Parse different action types
         patterns = {
-            "think": r'<think>(.*?)</think>',
             "user_message": r'<user_message>(.*?)</user_message>',
             "rx_claims": r'<rx_claims_agent>(.*?)</rx_claims_agent>',
             "med_claims": r'<med_claims_agent>(.*?)</med_claims_agent>',
-            "analysis": r'<analysis>(.*?)</analysis>',
             "output": r'<output>(.*?)</output>'
         }
 
@@ -117,10 +122,7 @@ class MainAgent:
             self.log(f"[EXECUTE] Processing action {idx+1}/{len(actions)}: type='{action_type}'")
             self.log(f"[EXECUTE] Action content: {content}")
 
-            if action_type == "think":
-                self.log(f"[EXECUTE-THINK] Processing thinking: {content[:100]}...")
-
-            elif action_type == "user_message":
+            if action_type == "user_message":
                 results["messages"].append(content)
                 self.log(f"[EXECUTE-USER_MSG] Added message to results: {content[:100]}...")
 
@@ -139,12 +141,6 @@ class MainAgent:
                 future = self.executor.submit(self.med_agent.execute, task_id, content)
                 results["data_collected"].append({"task_id": task_id, "future": future})
                 self.log(f"[EXECUTE-MED] Submitted Med claims task: {task_id}")
-
-            elif action_type == "analysis":
-                self.log(f"[EXECUTE-ANALYSIS] Starting analysis: {content[:100]}...")
-                analysis_result = self.perform_analysis(content)
-                results["messages"].append(f"Analysis result: {analysis_result}")
-                self.log(f"[EXECUTE-ANALYSIS] Analysis completed")
 
             elif action_type == "output":
                 results["messages"].append(content)
@@ -168,110 +164,6 @@ class MainAgent:
         self.log(f"[EXECUTE] Execution complete. Messages: {len(results['messages'])}, Errors: {len(results['errors'])}, Completed: {results['completed']}")
         return results
 
-    def perform_analysis(self, request: str) -> str:
-        """Perform analysis on collected data"""
-        # Check if any non-empty data exists
-        non_empty = [k for k, df in self.context.dataframes.items() if not df.is_empty()]
-        if not non_empty:
-            return "No data available - all queries returned empty results"
-
-        # Get available dataframes info
-        available_dfs = []
-        for key, df in self.context.dataframes.items():
-            available_dfs.append(f"{key}: {len(df)} rows, columns: {df.columns}")
-
-        # Use ANALYSIS_PROMPT to ensure Polars usage
-        prompt = f"""Available DataFrames with actual schemas:
-{chr(10).join(available_dfs)}
-
-Analysis Request: {request}"""
-
-        response = self.anthropic_client.messages.create(
-            model="claude-3-haiku-20240307",
-            max_tokens=2048,
-            system=ANALYSIS_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0
-        )
-
-        code = response.content[0].text
-        self.log(f"[ANALYSIS] Raw response length: {len(code)} chars")
-
-        code_match = re.search(r'```python\n(.*?)\n```', code, re.DOTALL)
-        if code_match:
-            code = code_match.group(1)
-            self.log(f"[ANALYSIS] Extracted Python code block: {len(code)} chars")
-        else:
-            self.log(f"[ANALYSIS-WARNING] No Python code block found, raw response: {code[:500]}")
-            # Try to extract code even without markers
-            if "import polars" in code or "import pl" in code:
-                self.log("[ANALYSIS] Attempting to use raw response as code")
-            else:
-                return "No valid Python code found in analysis response"
-
-        # Log the actual code to be executed
-        if self.debug:
-            self.log(f"[ANALYSIS-CODE] Code to execute:\n{code}")
-
-        # Log variables referenced in code vs available
-        if self.debug:
-            import ast
-            import builtins
-            try:
-                tree = ast.parse(code)
-                referenced_vars = {node.id for node in ast.walk(tree)
-                                 if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
-                available_vars = set(self.context.dataframes.keys()) | {'pl'}
-                builtin_names = set(dir(builtins))
-                # Exclude builtins, common variables, and those created in the code
-                undefined_vars = referenced_vars - available_vars - builtin_names - {'result', 'df', 'top_15', 'idx', 'row'}
-
-                # Only warn about variables that look like dataframe names
-                suspicious_vars = {v for v in undefined_vars if 'claims' in v or 'med_' in v or 'rx_' in v}
-
-                if suspicious_vars:
-                    self.log(f"[ANALYSIS-WARNING] Code references potentially undefined DataFrames: {suspicious_vars}")
-                    self.log(f"[ANALYSIS-WARNING] Available DataFrames: {set(self.context.dataframes.keys())}")
-            except SyntaxError:
-                self.log(f"[ANALYSIS-WARNING] Could not parse code for variable check")
-
-        # Execute analysis
-        try:
-            local_vars = dict(self.context.dataframes)
-            local_vars['pl'] = pl
-
-            # Capture print output during execution
-            import io
-            import sys
-            old_stdout = sys.stdout
-            sys.stdout = captured_output = io.StringIO()
-
-            try:
-                exec(code, {"__builtins__": __builtins__, "pl": pl}, local_vars)
-            finally:
-                sys.stdout = old_stdout
-
-            # Log captured output
-            output = captured_output.getvalue()
-            if output and self.debug:
-                self.log(f"[ANALYSIS-OUTPUT] Execution output:\n{output}")
-
-            if 'result' in local_vars:
-                result = local_vars['result']
-                if isinstance(result, pl.DataFrame):
-                    self.context.store_dataframe('analysis_result', result)
-                    self.log(f"[ANALYSIS-RESULT] DataFrame stored: {len(result)} rows, columns: {result.columns}")
-                    return f"Analysis completed: {len(result)} rows"
-                else:
-                    self.log(f"[ANALYSIS-RESULT] Result value: {result}")
-                    return str(result)
-
-            self.log("[ANALYSIS-RESULT] No 'result' variable found in executed code")
-            return "Analysis completed but no result found"
-
-        except Exception as e:
-            self.log(f"[ANALYSIS-ERROR] Execution failed: {str(e)}")
-            return f"Analysis failed: {str(e)}"
 
     def process_request(self, user_input: str) -> Tuple[str, Dict[str, Any]]:
         """Process a user request with iterative execution"""
@@ -294,9 +186,21 @@ Analysis Request: {request}"""
                     max_tokens=4096,
                     system=MAIN_AGENT_SYSTEM_PROMPT,
                     messages=self.context.conversation_history,
-                    temperature=0.1
+                    temperature=0
                 )
-                agent_response = response.content[0].text
+
+                # Extract text content from response (skip thinking blocks)
+                agent_response = ""
+                for block in response.content:
+                    if hasattr(block, 'type'):
+                        if block.type == 'thinking':
+                            self.log(f"[PROCESS-THINKING] Model thinking: {block.thinking[:200]}...")
+                        elif block.type == 'text':
+                            agent_response += block.text
+                    else:
+                        # Fallback for simple text response
+                        agent_response = block.text if hasattr(block, 'text') else str(block)
+
                 self.log(f"[PROCESS] Got response: {len(agent_response)} chars")
 
                 # Parse and execute
@@ -410,16 +314,12 @@ Analysis Request: {request}"""
 
     def _format_for_display(self, response: str) -> str:
         """Format agent response for clean user display"""
-        # Remove think blocks entirely
-        response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
 
         # Replace agent calls with status messages
         response = re.sub(r'<rx_claims_agent>.*?</rx_claims_agent>',
                          '[Querying prescription data...]', response, flags=re.DOTALL)
         response = re.sub(r'<med_claims_agent>.*?</med_claims_agent>',
                          '[Querying medical claims...]', response, flags=re.DOTALL)
-        response = re.sub(r'<analysis>.*?</analysis>',
-                         '[Analyzing results...]', response, flags=re.DOTALL)
 
         # Extract user messages and output
         user_msg_match = re.search(r'<user_message>(.*?)</user_message>', response, re.DOTALL)
@@ -439,16 +339,9 @@ Analysis Request: {request}"""
         return '\n\n'.join(clean_parts)
 
     def save_results(self):
-        """Save all collected data to files"""
+        """Save session metadata and logs (CSVs are saved by sub-agents)"""
         output_dir = f"output/session_{self.session_id}"
         os.makedirs(output_dir, exist_ok=True)
-
-        # Save dataframes
-        for key, df in self.context.dataframes.items():
-            if isinstance(df, pl.DataFrame) and not df.is_empty():
-                file_path = f"{output_dir}/{key}.parquet"
-                df.write_parquet(file_path)
-                self.log(f"Saved {key} to {file_path}")
 
         # Save context summary
         summary = self.context.get_summary()
