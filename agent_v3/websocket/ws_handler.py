@@ -18,10 +18,13 @@ class AsyncWebSocketHandler:
 
     def send_output(self, message: str) -> None:
         """Send output to WebSocket client (sync wrapper for async)"""
-        asyncio.run_coroutine_threadsafe(
-            self._send_output_async(message),
-            self.loop
-        ).result()
+        try:
+            asyncio.run_coroutine_threadsafe(
+                self._send_output_async(message),
+                self.loop
+            ).result(timeout=5.0)  # Add timeout to prevent indefinite blocking
+        except Exception as e:
+            print(f"Error sending output: {e}")
 
     async def _send_output_async(self, message: str) -> None:
         """Async send output"""

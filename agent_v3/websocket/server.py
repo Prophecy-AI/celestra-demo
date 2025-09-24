@@ -9,7 +9,6 @@ import time
 from datetime import datetime
 from typing import Dict, Any
 import websockets
-from websockets.server import WebSocketServerProtocol
 
 # Add parent directories to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -33,7 +32,7 @@ class WebSocketServer:
             timestamp = time.strftime('%H:%M:%S')
             print(f"[{timestamp}] [WS-SERVER] {message}")
 
-    async def handle_client(self, websocket: WebSocketServerProtocol, path: str):
+    async def handle_client(self, websocket):
         """Handle individual WebSocket client connection"""
         session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.log(f"New connection: {session_id}")
@@ -91,7 +90,7 @@ class WebSocketServer:
             if session_id in self.active_sessions:
                 del self.active_sessions[session_id]
 
-    async def process_message(self, session_id: str, text: str, io_handler: Any, websocket: WebSocketServerProtocol):
+    async def process_message(self, session_id: str, text: str, io_handler: Any, websocket):
         """Process incoming message through orchestrator"""
         try:
             # Create orchestrator with WebSocket IO handler
@@ -107,8 +106,9 @@ class WebSocketServer:
                 "io_handler": io_handler
             }
 
-            # Run orchestrator (this is synchronous but tools will use async io_handler)
-            result = await asyncio.to_thread(orchestrator.run, text)
+            # Run orchestrator in executor to not block event loop
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(None, orchestrator.run, text)
 
             # Send completion status
             await websocket.send(json.dumps({
