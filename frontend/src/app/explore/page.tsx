@@ -17,6 +17,13 @@ interface Cluster {
   size: number;
 }
 
+interface Dataset {
+  sessionId: string;
+  filename: string;
+  path: string;
+  timestamp: Date;
+}
+
 enum ServerState {
   IDLE = 'idle',
   PROCESSING = 'processing',
@@ -42,6 +49,7 @@ export default function ExplorePage() {
   const [connected, setConnected] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentStreamingMessage, setCurrentStreamingMessage] = useState<string>('');
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -143,6 +151,22 @@ export default function ExplorePage() {
         if (cleanText) {
           console.log('📝 Accumulating text:', cleanText);
           console.log('📊 Current server state:', serverState);
+
+          // Check for CSV path in the message
+          const csvPattern = /💾 Saved to: (output\/session_([\w]+)\/([\w-]+\.csv))/g;
+          const matches = [...cleanText.matchAll(csvPattern)];
+
+          for (const match of matches) {
+            const [_, fullPath, sessionPart, filename] = match;
+            console.log('📁 Found CSV:', fullPath);
+            setDatasets(prev => [...prev, {
+              sessionId: sessionPart,
+              filename: filename,
+              path: fullPath,
+              timestamp: new Date()
+            }]);
+          }
+
           streamingMessageRef.current += (streamingMessageRef.current ? '\n' : '') + cleanText;
           setCurrentStreamingMessage(streamingMessageRef.current);
           console.log('📄 New streaming message ref length:', streamingMessageRef.current.length);
@@ -355,6 +379,54 @@ export default function ExplorePage() {
                 <div ref={messagesEndRef} />
               </div>
             </div>
+
+            {/* CSV Downloads Section */}
+            {datasets.length > 0 && (
+              <div className="border-t border-gray-200 bg-gray-50 px-6 py-4">
+                <div className="max-w-4xl mx-auto">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-medium text-gray-900">📁 Generated Datasets</h3>
+                    <button
+                      onClick={() => setDatasets([])}
+                      className="text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {datasets.map((dataset, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-gray-200"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {dataset.filename}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Session: {dataset.sessionId.slice(0, 8)}...
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const url = `http://localhost:8766/download/${dataset.sessionId}/${dataset.filename}`;
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = dataset.filename;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }}
+                          className="ml-2 px-3 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 transition-colors"
+                        >
+                          Download
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Enhanced Chat Input */}
             <div className="border-t border-gray-200 bg-white p-6">

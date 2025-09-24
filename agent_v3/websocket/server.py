@@ -1,5 +1,5 @@
 """
-WebSocket server for agent_v3
+WebSocket server with FastAPI for agent_v3
 """
 import asyncio
 import json
@@ -9,7 +9,12 @@ import time
 from datetime import datetime
 from typing import Dict, Any
 from enum import Enum
+from pathlib import Path
 import websockets
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
 # Add parent directories to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -24,6 +29,52 @@ class SessionState(Enum):
     PROCESSING = "processing"
     STREAMING = "streaming"
     WAITING_INPUT = "waiting_input"
+
+
+# Create FastAPI app
+app = FastAPI(title="Healthcare Data Agent API")
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/download/{session_id}/{filename}")
+async def download_csv(session_id: str, filename: str):
+    """Download CSV file from a session"""
+    # Sanitize inputs to prevent path traversal
+    safe_session = os.path.basename(session_id)
+    safe_filename = os.path.basename(filename)
+
+    # Ensure it's a CSV file
+    if not safe_filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Only CSV files can be downloaded")
+
+    # Build file path
+    file_path = Path(f"output/session_{safe_session}/{safe_filename}")
+
+    # Check if file exists
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Return file
+    return FileResponse(
+        path=file_path,
+        media_type="text/csv",
+        filename=safe_filename,
+        headers={"Content-Disposition": f"attachment; filename={safe_filename}"}
+    )
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "agent_v3"}
 
 
 class WebSocketServer:
@@ -171,13 +222,14 @@ class WebSocketServer:
             await asyncio.Future()  # Run forever
 
 
-def main():
-    """Main entry point for WebSocket server"""
+async def run_servers():
+    """Run both FastAPI and WebSocket servers concurrently"""
     import argparse
 
-    parser = argparse.ArgumentParser(description="WebSocket server for agent_v3")
+    parser = argparse.ArgumentParser(description="WebSocket + HTTP server for agent_v3")
     parser.add_argument("--host", default="localhost", help="Server host")
-    parser.add_argument("--port", type=int, default=8765, help="Server port")
+    parser.add_argument("--ws-port", type=int, default=8765, help="WebSocket port")
+    parser.add_argument("--http-port", type=int, default=8766, help="HTTP API port")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
 
     args = parser.parse_args()
@@ -185,12 +237,55 @@ def main():
     if args.debug:
         os.environ["DEBUG"] = "1"
 
-    server = WebSocketServer(args.host, args.port)
+    # Create WebSocket server
+    ws_server = WebSocketServer(args.host, args.ws_port)
+
+    print(f"🚀 Starting servers:")
+    print(f"   WebSocket: ws://{args.host}:{args.ws_port}")
+    print(f"   HTTP API:  http://{args.host}:{args.http_port}")
+    print(f"📝 Debug mode: {'ON' if args.debug else 'OFF'}")
+    print("Press Ctrl+C to stop\n")
+
+    # Create tasks for both servers
+    tasks = []
+
+    # WebSocket server task
+    async def run_websocket():
+        async with websockets.serve(ws_server.handle_client, args.host, args.ws_port):
+            await asyncio.Future()  # Run forever
+
+    # FastAPI server task
+    async def run_fastapi():
+        config = uvicorn.Config(
+            app=app,
+            host=args.host,
+            port=args.http_port,
+            log_level="info" if args.debug else "error",
+            access_log=args.debug
+        )
+        server = uvicorn.Server(config)
+        await server.serve()
+
+    # Run both servers concurrently
+    tasks = [
+        asyncio.create_task(run_websocket()),
+        asyncio.create_task(run_fastapi())
+    ]
 
     try:
-        asyncio.run(server.start())
+        await asyncio.gather(*tasks)
     except KeyboardInterrupt:
-        print("\n👋 Server stopped")
+        print("\n👋 Servers stopped")
+        for task in tasks:
+            task.cancel()
+
+
+def main():
+    """Main entry point"""
+    try:
+        asyncio.run(run_servers())
+    except KeyboardInterrupt:
+        print("\n👋 Shutdown complete")
 
 
 if __name__ == "__main__":
