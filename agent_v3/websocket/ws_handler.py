@@ -8,6 +8,7 @@ from typing import Any
 from queue import Queue
 import threading
 import websockets.exceptions
+from agent_v3.exceptions import ConnectionLostError
 
 
 class AsyncWebSocketHandler:
@@ -33,12 +34,9 @@ class AsyncWebSocketHandler:
         except (websockets.exceptions.ConnectionClosed, 
                 websockets.exceptions.ConnectionClosedOK,
                 websockets.exceptions.ConnectionClosedError) as e:
-            # Re-raise as ConnectionError to stop orchestrator execution
-            raise ConnectionError(f"WebSocket connection closed: {e}")
+            # Re-raise as ConnectionLostError to stop orchestrator execution
+            raise ConnectionLostError(f"WebSocket connection closed: {e}")
         except Exception as e:
-            # Re-raise other connection-related errors
-            if "connection closed" in str(e).lower():
-                raise ConnectionError(f"WebSocket connection lost: {e}")
             print(f"Error sending output: {e}")
 
     async def _send_output_async(self, message: str) -> None:
@@ -63,12 +61,9 @@ class AsyncWebSocketHandler:
         except (websockets.exceptions.ConnectionClosed,
                 websockets.exceptions.ConnectionClosedOK,
                 websockets.exceptions.ConnectionClosedError) as e:
-            # Re-raise as ConnectionError to stop orchestrator execution
-            raise ConnectionError(f"WebSocket connection closed: {e}")
+            # Re-raise as ConnectionLostError to stop orchestrator execution
+            raise ConnectionLostError(f"WebSocket connection closed: {e}")
         except Exception as e:
-            # Re-raise other connection-related errors
-            if "connection closed" in str(e).lower():
-                raise ConnectionError(f"WebSocket connection lost: {e}")
             raise
 
     async def _get_user_input_async(self, prompt: str = "") -> str:
