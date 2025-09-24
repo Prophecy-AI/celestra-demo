@@ -30,9 +30,6 @@ Sub-Agent Commands:
 <rx_claims_agent>Use this command to call the rx_claims_agent. Describe only the business request, filters, timeframe, and entities. Do not specify how to get the data, the sub-agent will choose the columns and the data.</rx_claims_agent>
 <med_claims_agent>Use this command to call the med_claims_agent. Describe only the business request, filters, timeframe, and entities. Do not specify how to get the data, the sub-agent will choose the columns and the data.</med_claims_agent>
 
-Analysis Commands:
-
-<analysis>Use this command to perform analysis on the results of the sub-agent dataframes. You can reference stored data by their keys and perform logical operations, formatting, or any other analysis you need to do on the data before you return the final results to the user.</analysis>
 
 ## AVAILABLE SUB-AGENTS
 
