@@ -12,13 +12,14 @@ from .prompts.system_prompt import MAIN_SYSTEM_PROMPT
 class RecursiveOrchestrator:
     """Main orchestrator that manages the recursive flow"""
 
-    def __init__(self, session_id: str, debug: bool = False):
+    def __init__(self, session_id: str, debug: bool = False, io_handler=None):
         self.session_id = session_id
         self.debug = debug
-        self.context = Context(session_id)
+        self.context = Context(session_id, io_handler)
         self.llm_client = LLMClient()
         self.tools = get_all_tools()
         self.tool_names = list(self.tools.keys())
+        self.io_handler = io_handler
 
     def log(self, message: str):
         """Debug logging"""

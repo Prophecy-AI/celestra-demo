@@ -24,8 +24,9 @@ class Context:
     Thread-safety removed as we're using sequential execution.
     """
 
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, io_handler=None):
         self.session_id = session_id
+        self.io_handler = io_handler  # Optional IO handler for WebSocket mode
         self.conversation_history: List[Dict[str, str]] = []
         self.tool_history: List[ToolExecution] = []
         self.dataframes: Dict[str, pl.DataFrame] = {}

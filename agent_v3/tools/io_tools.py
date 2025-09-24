@@ -22,12 +22,22 @@ class Communicate(Tool):
 
         message = parameters["message"]
 
+        # Use IOHandler if available, otherwise fallback to print/input
+        io_handler = getattr(context, 'io_handler', None)
+
         # Display message to user
-        print(f"\n💬 Assistant: {message}")
+        output_msg = f"\n💬 Assistant: {message}"
+        if io_handler:
+            io_handler.send_output(output_msg)
+        else:
+            print(output_msg)
 
         # Get user response
         try:
-            user_response = input("\n👤 You: ").strip()
+            if io_handler:
+                user_response = io_handler.get_user_input("\n👤 You: ").strip()
+            else:
+                user_response = input("\n👤 You: ").strip()
 
             return ToolResult(
                 success=True,
@@ -61,66 +71,78 @@ class Complete(Tool):
         summary = parameters["summary"]
         dataset_names = parameters["datasets"]
 
+        # Use IOHandler if available
+        io_handler = getattr(context, 'io_handler', None)
+
+        # Helper function for output
+        def output(msg: str):
+            if io_handler:
+                io_handler.send_output(msg)
+            else:
+                print(msg)
+
         # Display summary
-        print("\n" + "="*80)
-        print("📊 RESULTS SUMMARY")
-        print("="*80)
-        print(f"\n{summary}\n")
+        output("\n" + "="*80)
+        output("📊 RESULTS SUMMARY")
+        output("="*80)
+        output(f"\n{summary}\n")
 
         # Display datasets if any
         if dataset_names:
-            print("📁 DATASETS CREATED:")
-            print("-"*40)
+            output("📁 DATASETS CREATED:")
+            output("-"*40)
 
             for name in dataset_names:
                 df = context.get_dataframe(name)
-                if df is not None:
-                    print(f"\n✅ {name}")
-                    print(f"   Shape: {df.shape[0]:,} rows × {df.shape[1]} columns")
+                if df is not None and not df.is_empty():
+                    output(f"\n✅ {name}")
+                    output(f"   Shape: {df.shape[0]:,} rows × {df.shape[1]} columns")
 
                     # Show column list
-                    print(f"   Columns: {', '.join(df.columns[:5])}", end="")
+                    cols_msg = f"   Columns: {', '.join(df.columns[:5])}"
                     if len(df.columns) > 5:
-                        print(f", ... ({len(df.columns)-5} more)")
-                    else:
-                        print()
+                        cols_msg += f", ... ({len(df.columns)-5} more)"
+                    output(cols_msg)
 
                     # Show CSV path if saved
                     csv_path = context.csv_paths.get(name)
                     if csv_path:
-                        print(f"   💾 Saved to: {csv_path}")
+                        output(f"   💾 Saved to: {csv_path}")
 
                     # Show preview
-                    print(f"\n   Preview:")
-                    print("   " + "-"*36)
+                    output(f"\n   Preview:")
+                    output("   " + "-"*36)
 
                     # Format dataframe display with indentation
                     df_display = str(df)
                     for line in df_display.split('\n'):
-                        print(f"   {line}")
+                        output(f"   {line}")
 
                     # Show SQL query (collapsible in real UI)
                     sql = context.queries.get(name)
                     if sql:
-                        print(f"\n   SQL Query:")
-                        print("   " + "-"*36)
+                        output(f"\n   SQL Query:")
+                        output("   " + "-"*36)
                         # Show first 3 lines of SQL
                         sql_lines = sql.split('\n')
                         for i, line in enumerate(sql_lines[:3]):
-                            print(f"   {line}")
+                            output(f"   {line}")
                         if len(sql_lines) > 3:
-                            print(f"   ... ({len(sql_lines)-3} more lines)")
+                            output(f"   ... ({len(sql_lines)-3} more lines)")
 
-            print("\n" + "="*80)
+            output("\n" + "="*80)
 
         # Get user feedback
-        print("\n🤔 What would you like to do next?")
-        print("   - Type your next request to continue analyzing")
-        print("   - Type 'END' to finish the session")
-        print("   - Press Enter to continue with current results")
+        output("\n🤔 What would you like to do next?")
+        output("   - Type your next request to continue analyzing")
+        output("   - Type 'END' to finish the session")
+        output("   - Press Enter to continue with current results")
 
         try:
-            user_feedback = input("\n👤 You: ").strip()
+            if io_handler:
+                user_feedback = io_handler.get_user_input("\n👤 You: ").strip()
+            else:
+                user_feedback = input("\n👤 You: ").strip()
 
             # Parse action
             action = "end" if user_feedback.upper() == "END" else "continue"
