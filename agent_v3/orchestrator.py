@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 from .context import Context
 from .llm_client import LLMClient
 from .tools import get_all_tools
-from .prompts.system_prompt import MAIN_SYSTEM_PROMPT
+from .prompts.system_prompt import get_main_system_prompt
 
 
 class RecursiveOrchestrator:
@@ -97,7 +97,7 @@ class RecursiveOrchestrator:
             self.log("Calling LLM for tool selection...")
             tool_call = self.llm_client.create_message(
                 messages=messages,
-                system_prompt=MAIN_SYSTEM_PROMPT,
+                system_prompt=get_main_system_prompt(),
                 available_tools=self.tool_names
             )
 

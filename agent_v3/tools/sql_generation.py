@@ -22,12 +22,22 @@ class TextToSQLRx(Tool):
 
     def _build_system_prompt(self) -> str:
         """Build the system prompt with data dictionary"""
-        return """
+        from datetime import datetime
+        
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        
+        return f"""
 You are a BigQuery Standard SQL generator for prescription (Rx) claims data analysis.
 
 TASK: Convert natural language queries into executable BigQuery Standard SQL.
 
 CRITICAL: Output ONLY the SQL query. No explanations, no descriptions, no text before or after the SQL.
+
+CURRENT DATE: Today is {current_date}. When users ask for "recent", "current", "this year", "last month", etc., use BigQuery date functions:
+- CURRENT_DATE() for today's date
+- DATE_SUB(CURRENT_DATE(), INTERVAL n DAY/MONTH/YEAR) for past periods
+- Example: "recent prescriptions" → WHERE SERVICE_DATE_DD >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+- Example: "this year" → WHERE EXTRACT(YEAR FROM SERVICE_DATE_DD) = EXTRACT(YEAR FROM CURRENT_DATE())
 
 TABLE: `unique-bonbon-472921-q8.Claims.rx_claims`
 
@@ -196,12 +206,22 @@ class TextToSQLMed(Tool):
 
     def _build_system_prompt(self) -> str:
         """Build the system prompt with data dictionary"""
-        return """
+        from datetime import datetime
+        
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        
+        return f"""
 You are a BigQuery Standard SQL generator for medical claims data analysis.
 
 TASK: Convert natural language queries into executable BigQuery Standard SQL.
 
 CRITICAL: Output ONLY the SQL query. No explanations, no descriptions, no text before or after the SQL.
+
+CURRENT DATE: Today is {current_date}. When users ask for "recent", "current", "this year", "last month", etc., use BigQuery date functions:
+- CURRENT_DATE() for today's date
+- DATE_SUB(CURRENT_DATE(), INTERVAL n DAY/MONTH/YEAR) for past periods
+- Example: "recent claims" → WHERE STATEMENT_FROM_DD >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+- Example: "this year" → WHERE EXTRACT(YEAR FROM STATEMENT_FROM_DD) = EXTRACT(YEAR FROM CURRENT_DATE())
 
 TABLE: `unique-bonbon-472921-q8.Claims.medical_claims`
 
