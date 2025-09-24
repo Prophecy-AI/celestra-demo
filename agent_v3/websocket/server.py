@@ -8,6 +8,7 @@ import sys
 import time
 from datetime import datetime
 from typing import Dict, Any
+from enum import Enum
 import websockets
 
 # Add parent directories to path
@@ -17,6 +18,14 @@ from agent_v3.orchestrator import RecursiveOrchestrator
 from agent_v3.websocket.ws_handler import AsyncWebSocketHandler
 
 
+class SessionState(Enum):
+    """Session states for proper flow control"""
+    IDLE = "idle"
+    PROCESSING = "processing"
+    STREAMING = "streaming"
+    WAITING_INPUT = "waiting_input"
+
+
 class WebSocketServer:
     """WebSocket server for agent communication"""
 
@@ -24,6 +33,7 @@ class WebSocketServer:
         self.host = host
         self.port = port
         self.active_sessions: Dict[str, Any] = {}
+        self.session_states: Dict[str, SessionState] = {}
         self.debug = os.getenv("DEBUG", "0") == "1"
 
     def log(self, message: str):
@@ -32,10 +42,25 @@ class WebSocketServer:
             timestamp = time.strftime('%H:%M:%S')
             print(f"[{timestamp}] [WS-SERVER] {message}")
 
+    def _update_state(self, session_id: str, state: SessionState) -> None:
+        """Update session state and notify client"""
+        self.session_states[session_id] = state
+        self.log(f"Session {session_id} state: {state.value}")
+
+    async def _send_state(self, websocket, state: SessionState) -> None:
+        """Send state update to client"""
+        await websocket.send(json.dumps({
+            "type": "state",
+            "value": state.value
+        }))
+
     async def handle_client(self, websocket):
         """Handle individual WebSocket client connection"""
         session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.log(f"New connection: {session_id}")
+
+        # Initialize session state
+        self.session_states[session_id] = SessionState.IDLE
 
         # Send welcome message
         await websocket.send(json.dumps({
@@ -44,8 +69,8 @@ class WebSocketServer:
             "session_id": session_id
         }))
 
-        # Create async IO handler for this session
-        io_handler = AsyncWebSocketHandler(websocket)
+        # Create async IO handler for this session with state tracking
+        io_handler = AsyncWebSocketHandler(websocket, lambda s: self._update_state(session_id, s))
 
         try:
             async for message in websocket:
@@ -53,18 +78,24 @@ class WebSocketServer:
                     data = json.loads(message)
 
                     if data.get("type") == "message":
-                        text = data.get("text", "").strip()
+                        # Check if we can accept messages
+                        current_state = self.session_states.get(session_id, SessionState.IDLE)
+                        if current_state not in [SessionState.IDLE, SessionState.WAITING_INPUT]:
+                            await websocket.send(json.dumps({
+                                "type": "error",
+                                "text": f"Cannot accept messages while {current_state.value}"
+                            }))
+                            continue
 
+                        text = data.get("text", "").strip()
                         if not text:
                             continue
 
-                        # Send processing status
-                        await websocket.send(json.dumps({
-                            "type": "status",
-                            "state": "processing"
-                        }))
+                        # Update state to processing
+                        self._update_state(session_id, SessionState.PROCESSING)
+                        await self._send_state(websocket, SessionState.PROCESSING)
 
-                        # Run orchestrator in thread pool to avoid blocking
+                        # Run orchestrator
                         await self.process_message(session_id, text, io_handler, websocket)
 
                     elif data.get("type") == "ping":
@@ -89,6 +120,8 @@ class WebSocketServer:
             # Clean up session
             if session_id in self.active_sessions:
                 del self.active_sessions[session_id]
+            if session_id in self.session_states:
+                del self.session_states[session_id]
 
     async def process_message(self, session_id: str, text: str, io_handler: Any, websocket):
         """Process incoming message through orchestrator"""
@@ -116,6 +149,10 @@ class WebSocketServer:
                 "state": "complete",
                 "summary": result.get("summary", {})
             }))
+
+            # Return to idle state
+            self._update_state(session_id, SessionState.IDLE)
+            await self._send_state(websocket, SessionState.IDLE)
 
         except Exception as e:
             self.log(f"Orchestrator error: {str(e)}")

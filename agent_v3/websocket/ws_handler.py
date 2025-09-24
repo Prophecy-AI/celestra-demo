@@ -12,12 +12,18 @@ import threading
 class AsyncWebSocketHandler:
     """Async WebSocket IO handler that bridges sync and async worlds"""
 
-    def __init__(self, websocket: Any):
+    def __init__(self, websocket: Any, state_callback=None):
         self.websocket = websocket
         self.loop = asyncio.get_event_loop()
+        self.state_callback = state_callback  # Callback to update session state
 
     def send_output(self, message: str) -> None:
         """Send output to WebSocket client (sync wrapper for async)"""
+        # Update state to streaming when sending output
+        if self.state_callback:
+            from agent_v3.websocket.server import SessionState
+            self.state_callback(SessionState.STREAMING)
+
         try:
             asyncio.run_coroutine_threadsafe(
                 self._send_output_async(message),
@@ -35,6 +41,11 @@ class AsyncWebSocketHandler:
 
     def get_user_input(self, prompt: str = "") -> str:
         """Get input from WebSocket client (sync wrapper for async)"""
+        # Update state to waiting for input
+        if self.state_callback:
+            from agent_v3.websocket.server import SessionState
+            self.state_callback(SessionState.WAITING_INPUT)
+
         return asyncio.run_coroutine_threadsafe(
             self._get_user_input_async(prompt),
             self.loop
@@ -48,10 +59,10 @@ class AsyncWebSocketHandler:
                 "text": prompt
             }))
 
-        # Send status to indicate waiting for input
+        # Send state update to indicate waiting for input
         await self.websocket.send(json.dumps({
-            "type": "status",
-            "state": "waiting"
+            "type": "state",
+            "value": "waiting_input"
         }))
 
         # Wait for next message from client
@@ -62,10 +73,14 @@ class AsyncWebSocketHandler:
             if data.get("type") == "message":
                 text = data.get("text", "")
 
-                # Send processing status
+                # Update state back to processing
+                if self.state_callback:
+                    from agent_v3.websocket.server import SessionState
+                    self.state_callback(SessionState.PROCESSING)
+
                 await self.websocket.send(json.dumps({
-                    "type": "status",
-                    "state": "processing"
+                    "type": "state",
+                    "value": "processing"
                 }))
 
                 return text

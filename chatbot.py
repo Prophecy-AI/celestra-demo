@@ -14,6 +14,8 @@ class ChatbotCLI:
         self.uri = uri
         self.websocket: Optional[websockets.WebSocketClientProtocol] = None
         self.running = True
+        self.server_state = "idle"  # Track server state
+        self.can_send = True  # Whether we can send messages
 
     async def connect(self):
         """Connect to WebSocket server"""
@@ -43,13 +45,24 @@ class ChatbotCLI:
 
                 if data.get("type") == "output":
                     print(data.get("text", ""))
+                elif data.get("type") == "state":
+                    # Update server state
+                    self.server_state = data.get("value", "idle")
+                    self.can_send = self.server_state in ["idle", "waiting_input"]
+
+                    if self.server_state == "processing":
+                        print("\n⚡ Processing...", end="", flush=True)
+                    elif self.server_state == "streaming":
+                        # Don't print anything, just receiving stream
+                        pass
+                    elif self.server_state == "waiting_input":
+                        print("\n⏳ Waiting for your input...", end="", flush=True)
+                    elif self.server_state == "idle":
+                        print("\n✅ Ready", end="", flush=True)
+
                 elif data.get("type") == "status":
                     state = data.get("state")
-                    if state == "processing":
-                        print("\n⚡ Processing...", end="", flush=True)
-                    elif state == "waiting":
-                        print("\n⏳ Waiting for input...", end="", flush=True)
-                    elif state == "complete":
+                    if state == "complete":
                         print("\n✅ Complete!")
                 elif data.get("type") == "prompt":
                     # Server is waiting for input
@@ -84,6 +97,10 @@ class ChatbotCLI:
                     break
 
                 if user_input.strip():
+                    # Check if we can send
+                    if not self.can_send:
+                        print(f"⚠️ Cannot send message - server is {self.server_state}")
+                        continue
                     await self.send_message(user_input)
 
             except EOFError:
