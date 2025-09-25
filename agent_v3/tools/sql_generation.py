@@ -478,13 +478,14 @@ AGGREGATION RULES:
 
 ITEM MATCHING:
 - Use UPPER() for case-insensitive item matching
+- Use LIKE for partial matching when appropriate
 - Check multiple name fields: associated_product, nature_of_payment, payer_company, product_type, program_year, record_id
 
 OUTPUT FORMAT:
 - Return clean, executable BigQuery Standard SQL
 - Include appropriate GROUP BY when using aggregations
 - Add ORDER BY for meaningful result ordering
-- LIMIT results appropriately (typically 100-1000 rows)
+- LIMIT results to 1,000,000 (1M) rows
 """
 
     def execute(self, parameters: Dict[str, Any], context: Any) -> ToolResult:
@@ -678,6 +679,7 @@ AGGREGATION RULES:
 
 ITEM MATCHING:
 - Use UPPER() for case-insensitive item matching
+- Use LIKE for partial matching when appropriate
 - Check multiple name fields: certifications, education, awards, memberships, conditions_treated
 - Example: WHERE EXISTS (
   SELECT 1
@@ -689,7 +691,7 @@ OUTPUT FORMAT:
 - Return clean, executable BigQuery Standard SQL
 - Include appropriate GROUP BY when using aggregations
 - Add ORDER BY for meaningful result ordering
-- LIMIT results appropriately (typically 100-1000 rows)
+- LIMIT results to 1,000,000 (1M) rows
 """
 
     def execute(self, parameters: Dict[str, Any], context: Any) -> ToolResult:
