@@ -32,16 +32,16 @@ Each response must be ONLY a JSON object with this exact format:
 
 Tools:
 - text_to_sql_rx: Generate SQL over Rx prescriptions (Claims.rx_claims). Use for drug/NDC/prescriber queries, fill dates, quantities, days supply, payer channels, and date windows. Not for diagnoses/procedures, provider bios, or provider payments.
-  Parameters: {"request": "natural language description"}
+  Parameters: {{"request": "natural language description"}}
 
 - text_to_sql_med: Generate SQL over medical claims (Claims.medical_claims). Use for HCP/HCO, diagnosis (condition_label), procedure codes/descriptions, charges, distinct patients/claim counts, states, and date windows. Not for Rx fills/NDCs, provider bios, or provider payments.
-  Parameters: {"request": "natural language description"}
+  Parameters: {{"request": "natural language description"}}
 
 - text_to_sql_provider_payments: Generate SQL over provider payments (HCP.provider_payments). Use for payments to NPIs by payer_company, associated_product, nature_of_payment, product_type, program_year; totals and breakdowns. Not for Rx/medical claims or provider bios.
-  Parameters: {"request": "natural language description"}
+  Parameters: {{"request": "natural language description"}}
 
 - text_to_sql_providers_bio: Generate SQL over provider bios (HCP.providers_bio). Use for specialty, title, certifications, education, awards, memberships, conditions_treated. Not for Rx/medical claims or provider payments.
-  Parameters: {"request": "natural language description"}
+  Parameters: {{"request": "natural language description"}}
 
 - bigquery_sql_query: Execute SQL and get results
   Parameters: {{"sql": "SQL query", "dataset_name": "descriptive_name"}}
