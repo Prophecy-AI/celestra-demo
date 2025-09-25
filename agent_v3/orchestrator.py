@@ -205,13 +205,15 @@ class RecursiveOrchestrator:
             return
 
         # If last tool was SQL generation, hint to execute it
-        if last_tool in ["text_to_sql_rx", "text_to_sql_med"]:
+        if last_tool in ["text_to_sql_rx", "text_to_sql_med", "text_to_sql_provider_payments", "text_to_sql_providers_bio"]:
             last_result = self.context.get_last_tool_result()
             if "sql" in last_result and not self.context.has_error():
-                self.context.add_system_hint(
-                    "SQL query has been generated. Use 'bigquery_sql_query' to execute it."
+                hint_msg = (
+                    "SQL query has been generated. Use 'bigquery_sql_query' to execute it, "
+                    "or call more tools IF NECESSARY to capture all the context needed from this or other datasets."
                 )
-                self.log("Added hint: Execute generated SQL")
+                self.context.add_system_hint(hint_msg)
+                self.log(f"Added hint: {hint_msg}")
 
         # If we have collected some data, hint about completion
         elif last_tool == "bigquery_sql_query":
