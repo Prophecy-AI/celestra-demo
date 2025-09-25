@@ -9,9 +9,11 @@ from datetime import datetime
 from dotenv import load_dotenv
 from .orchestrator import RecursiveOrchestrator
 from langfuse import Langfuse, observe, get_client
+
+load_dotenv()
 langfuse = Langfuse(
-  secret_key="sk-lf-36a3d084-014d-4cf3-bab8-617de866ee15",
-  public_key="pk-lf-3748c8d9-17ff-41bd-b492-f055bc005570",
+  secret_key=os.getenv("LANGFUSE_SECRET"),
+  public_key=os.getenv("LANGFUSE_PUBLIC"),
   host="https://us.cloud.langfuse.com"
 )
 langfuse = get_client()
