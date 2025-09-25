@@ -4,7 +4,7 @@ Evaluates if retrieved data is relevant to user queries
 """
 import os
 import asyncio
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 import json
 
 try:
@@ -117,11 +117,9 @@ Please evaluate how well the retrieved data addresses the user's query and infor
 
             result_text = response.choices[0].message.content.strip()
 
-            # Parse JSON response
             try:
                 result = json.loads(result_text)
             except json.JSONDecodeError:
-                # Fallback if JSON parsing fails
                 result = {
                     "query_alignment": 0.5,
                     "completeness": 0.5,

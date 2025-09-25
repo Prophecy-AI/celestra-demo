@@ -111,13 +111,11 @@ Please evaluate this SQL query according to the criteria and provide scores."""
             print(f"🔍 SQL Evaluator: Raw response length: {len(result_text)} chars")
             print(f"🔍 SQL Evaluator: Response preview: {result_text[:200]}...")
 
-            # Parse JSON response
             try:
                 result = json.loads(result_text)
                 print(f"🔍 SQL Evaluator: Successfully parsed JSON, overall_score: {result.get('overall_score', 'missing')}")
             except json.JSONDecodeError as e:
                 print(f"🔍 SQL Evaluator: JSON parsing failed: {e}")
-                # Fallback if JSON parsing fails
                 result = {
                     "syntax_correctness": 0.5,
                     "query_logic": 0.5,

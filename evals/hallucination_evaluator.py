@@ -119,11 +119,9 @@ Please evaluate this healthcare data analysis response for potential hallucinati
 
             result_text = response_obj.choices[0].message.content.strip()
 
-            # Parse JSON response
             try:
                 result = json.loads(result_text)
             except json.JSONDecodeError:
-                # Fallback if JSON parsing fails
                 result = {
                     "factual_accuracy": 0.5,
                     "data_consistency": 0.5,
