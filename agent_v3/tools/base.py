@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 import time
+from agent_v3.exceptions import ConnectionLostError
 
 
 @dataclass
@@ -57,6 +58,9 @@ class Tool(ABC):
                     "execution_time": execution_time
                 }
 
+        except ConnectionLostError:
+            # Don't catch connection errors - let them propagate up
+            raise
         except Exception as e:
             return {
                 "error": f"Tool execution failed: {str(e)}",

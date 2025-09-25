@@ -7,6 +7,8 @@ import os
 from typing import Any
 from queue import Queue
 import threading
+import websockets.exceptions
+from agent_v3.exceptions import ConnectionLostError
 
 
 class AsyncWebSocketHandler:
@@ -29,6 +31,11 @@ class AsyncWebSocketHandler:
                 self._send_output_async(message),
                 self.loop
             ).result(timeout=5.0)  # Add timeout to prevent indefinite blocking
+        except (websockets.exceptions.ConnectionClosed, 
+                websockets.exceptions.ConnectionClosedOK,
+                websockets.exceptions.ConnectionClosedError) as e:
+            # Re-raise as ConnectionLostError to stop orchestrator execution
+            raise ConnectionLostError(f"WebSocket connection closed: {e}")
         except Exception as e:
             print(f"Error sending output: {e}")
 
@@ -46,10 +53,18 @@ class AsyncWebSocketHandler:
             from agent_v3.websocket.server import SessionState
             self.state_callback(SessionState.WAITING_INPUT)
 
-        return asyncio.run_coroutine_threadsafe(
-            self._get_user_input_async(prompt),
-            self.loop
-        ).result()
+        try:
+            return asyncio.run_coroutine_threadsafe(
+                self._get_user_input_async(prompt),
+                self.loop
+            ).result()
+        except (websockets.exceptions.ConnectionClosed,
+                websockets.exceptions.ConnectionClosedOK,
+                websockets.exceptions.ConnectionClosedError) as e:
+            # Re-raise as ConnectionLostError to stop orchestrator execution
+            raise ConnectionLostError(f"WebSocket connection closed: {e}")
+        except Exception as e:
+            raise
 
     async def _get_user_input_async(self, prompt: str = "") -> str:
         """Async get user input"""
@@ -88,10 +103,19 @@ class AsyncWebSocketHandler:
     def send_log(self, message: str, level: str = "info") -> None:
         """Send log to WebSocket client (sync wrapper for async)"""
         if os.getenv("DEBUG", "0") == "1":
-            asyncio.run_coroutine_threadsafe(
-                self._send_log_async(message, level),
-                self.loop
-            ).result()
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    self._send_log_async(message, level),
+                    self.loop
+                ).result()
+            except (websockets.exceptions.ConnectionClosed,
+                    websockets.exceptions.ConnectionClosedOK,
+                    websockets.exceptions.ConnectionClosedError):
+                # Silently skip logs if connection is closed (logs are optional)
+                pass
+            except Exception:
+                # Silently ignore other log errors - they're not critical
+                pass
 
     async def _send_log_async(self, message: str, level: str = "info") -> None:
         """Async send log"""
