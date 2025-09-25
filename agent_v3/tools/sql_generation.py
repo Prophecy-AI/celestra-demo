@@ -47,6 +47,13 @@ KEY COLUMNS:
 - NDC_DRUG_NM: STRING - Drug name as identified by NDC
 - NDC_GENERIC_NM: STRING - Generic name of the medication
 - NDC_PREFERRED_BRAND_NM: STRING - Preferred brand name of the medication
+- NDC_DESC: STRING - Detailed product description (high-cardinality text)
+- NDC_DOSAGE_FORM_NM: STRING - Dosage form label (tablet, injectable, etc.)
+- NDC_DRUG_FORM_NM: STRING - Drug formulation descriptor (varies widely)
+- NDC_DRUG_BASE_NM: STRING - Base chemical name for the drug
+- NDC_DRUG_CLASS_NM: STRING - Therapeutic class label
+- NDC_DRUG_GROUP_NM: STRING - Drug group category
+- NDC_DRUG_SUBCLASS_NM: STRING - Drug subclass category
 - SERVICE_DATE_DD: DATE - Date when the pharmacy service was provided
 - DATE_PRESCRIPTION_WRITTEN_DD: DATE - Date when prescription was written
 - PRESCRIBER_NPI_STATE_CD: STRING - State code where prescriber is located
@@ -54,7 +61,17 @@ KEY COLUMNS:
 - DISPENSED_QUANTITY_VAL: NUMERIC - Quantity of medication dispensed
 - DAYS_SUPPLY_VAL: NUMERIC - Number of days the medication supply should last
 - TOTAL_PAID_AMT: NUMERIC - Total amount paid for the prescription
-- PAYER_PAYER_NM: STRING - Name of the insurance payer
+- PAYER_PAYER_NM: STRING - Individual payer organization name (high-cardinality)
+- PAYER_PLAN_CHANNEL_NM: STRING - Payer channel grouping (Commercial, Medicare, etc.)
+- PAYER_PLAN_SUBCHANNEL_NM: STRING - Detailed payer subchannel category
+- TRANSACTION_STATUS_NM: STRING - Claim transaction outcome (Dispensed, Reversed, etc.)
+- FINAL_STATUS_CD: STRING - Adjudication status code from claims processing
+- ADMIN_SERVICE_LINE: STRING - Administrative service line category
+- ADMIN_SUBSERVICE_LINE: STRING - Administrative subservice detail
+- CLINICAL_SERVICE_LINE: STRING - Clinical service line category
+- CLINICAL_SUBSERVICE_LINE: STRING - Clinical subservice specialty detail
+- PRESCRIBER_NPI_HCP_SEGMENT_DESC: STRING - Prescriber segment descriptor
+- PHARMACY_NPI_STATE_CD: STRING - Pharmacy state code
 
 COLUMN SELECTION PRIORITY:
 - For prescriber queries: Include ONLY PRESCRIBER_NPI_NBR and requested metrics
@@ -81,6 +98,20 @@ OUTPUT FORMAT:
 - Include appropriate GROUP BY when using aggregations
 - Add ORDER BY for meaningful result ordering
 - LIMIT results to 1,000,000 (1M) rows
+
+## RX CLAIMS LOOKUP CONTEXT
+
+- Curated categorical values:
+  - NDC_GENERIC_NM: Upadacitinib, Baricitinib, Tofacitinib Citrate, Secukinumab, Secukinumab (300 Mg Dose), Ixekizumab, Abrocitinib, Tofacitinib Citrate Er, Risankizumab-Rzaa, Risankizumab-Rzaa(150 Mg Dose), Tildrakizumab-Asmn, Adalimumab, Tofacitinib, Guselkumab, Upadacitinib Er, Apremilast, Ustekinumab, Dupilumab
+  - NDC_PREFERRED_BRAND_NM: Cosentyx, Tremfya, Xeljanz, Rinvoq, Taltz, Dupixent, Cibinqo, Stelara, Ilumya, Humira, Skyrizi, Olumiant, Otezla
+  - NDC_IMPLIED_BRAND_NM: Xeljanz_Pfizer Inc., Otezla_Amgen, Inc., Taltz_Eli Lilly & Co., Cibinqo_Eli Lilly & Co., Dupixent_Sanofi, Skyrizi_Abbvie, Inc., Cibinqo_Pfizer Inc., Humira, Cosentyx_Novartis Ag, Otezla, Ilumya_Sun Pharmaceutical Industries Ltd., Taltz, Otezla_Metagenics, Inc., Otezla_Trimarc Labs, Rinvoq_Abbvie, Inc., Cosentyx, Humira_Abbvie, Inc., Dupixent_Alcon Ag, Rinvoq_Icu Medical, Inc., Stelara_Johnson & Johnson, Rinvoq_Baxter International, Inc., Otezla_Celgene Corporation, Ilumya_Perrigo Co. Plc, Tremfya_Johnson & Johnson, Olumiant_Gsms, Inc., Tremfya, Olumiant_Eli Lilly & Co., Rinvoq, Xeljanz_Shoreline Pharmaceuticals, Inc., Cosentyx_Nutramax Laboratories, Inc., Olumiant_Dr. Reddy's Laboratories Ltd.
+  - NDC_DRUG_CLASS_NM: Anti-Tnf-Alpha - Monoclonal Antibodies, Antipsoriatics, Inflammatory Bowel Agents, Eczema Agents, Antirheumatic - Enzyme Inhibitors, Phosphodiesterase 4 (Pde4) Inhibitors
+  - NDC_DRUG_GROUP_NM: Analgesics - Anti-Inflammatory, Dermatologicals, Gastrointestinal Agents - Misc.
+  - NDC_DRUG_SUBCLASS_NM: Antirheumatic - Janus Kinase (Jak) Inhibitors, Anti-Tnf-Alpha - Monoclonal Antibodies, Atopic Dermatitis - Janus Kinase (Jak) Inhibitors, Atopic Dermatitis - Monoclonal Antibodies, Interleukin Antagonists, Antipsoriatics - Systemic, Phosphodiesterase 4 (Pde4) Inhibitors
+  - PAYER_PLAN_SUBCHANNEL_NM: Medicare / FFS (Part B), Commercial / Health Insurance Marketplace, Dual Medicaid / Medicare / Unspecified, Commercial / Cash or Self-Pay, Other / Government / Federal Program, Medicaid / CHIP, Other / Government / Champus - TRICARE, Medicare / Advantage (Part C), Other / Liability / Workers' Compensation, Other / Liability / Auto Medical, Other / Government / Veterans Affairs, Commercial / Voucher, Commercial / Discount Card, Other / Other, Other / Government / State or Local Program, Medicaid / Managed, Medicare / Advantage (Part D), Medicaid / FFS, Other / Unknown, Medicaid / Unspecified, Commercial / Commercial, Commercial / Medicare / Supplemental (Part B), Medicare / Unspecified, Commercial / Dental
+  - PAYER_PLAN_CHANNEL_NM: Medicare, Other, Medicaid, Commercial, Dual (Medicaid/Medicare)
+  - TRANSACTION_STATUS_NM: Reversed, Reject, Dispensed
+  - CLINICAL_SERVICE_LINE: Neurology, ENT, Signs and Symptoms, Ophthalmology, General Surgery, Unknown, Neonatology, Urology, Vascular Services, Obstetrics, Other Trauma, Orthopedics, Cardiac Services, Spine, Gynecology, Oncology/Hematology (Medical), General Medicine
 """
 
     def execute(self, parameters: Dict[str, Any], context: Any) -> ToolResult:
@@ -230,6 +261,10 @@ KEY COLUMNS:
 - PRIMARY_HCP_NAME: STRING - Full name of the primary healthcare provider
 - PRIMARY_HCO: STRING - Primary Healthcare Organization identifier
 - PRIMARY_HCO_NAME: STRING - Name of the primary healthcare organization
+- PRIMARY_HCO_SOURCE: STRING - Source system for organization record
+- PRIMARY_HCO_PROVIDER_CLASSIFICATION: STRING - Organization type/classification
+- PRIMARY_HCP_SEGMENT: STRING - Primary HCP segment categorization
+- PRIMARY_HCP_SOURCE: STRING - Source system for provider record
 - condition_label: STRING - Label describing the primary medical condition treated
 - PROCEDURE_CD: STRING - Medical procedure code (CPT, HCPCS)
 - PROCEDURE_CODE_DESC: STRING - Description of the medical procedure
@@ -237,9 +272,17 @@ KEY COLUMNS:
 - STATEMENT_TO_DD: DATE - End date of billing period
 - RENDERING_PROVIDER_STATE: STRING - State where services were rendered
 - RENDERING_PROVIDER_ZIP: STRING - ZIP code where services were rendered
+- RENDERING_PROVIDER_SEGMENT: STRING - Rendering provider segment categorization
 - CLAIM_CHARGE_AMT: NUMERIC - Total charge amount for the claim
 - distinct_patient_count: INTEGER - Count of unique patients
 - total_claim_count: INTEGER - Total number of claims
+- CLAIM_CATEGORY: STRING - Claim grouping/category label
+- PAYER_1_NAME: STRING - Primary payer organization name (high-cardinality)
+- PAYER_1_CHANNEL_NAME: STRING - Payer channel grouping (Commercial, Medicare, etc.)
+- PAYER_1_SUBCHANNEL_NAME: STRING - Detailed payer subchannel category
+- ENCOUNTER_CHANNEL_NM: STRING - Encounter channel category
+- ENCOUNTER_SUBCHANNEL_NM: STRING - Encounter subchannel detail
+- claim_year: INTEGER - Service year field
 
 COLUMN SELECTION PRIORITY:
 - For provider/HCP queries: Include ONLY PRIMARY_HCP and requested metrics
@@ -268,6 +311,14 @@ OUTPUT FORMAT:
 - Include appropriate GROUP BY when using aggregations
 - Add ORDER BY for meaningful result ordering
 - LIMIT results to 1,000,000 (1M) rows
+
+## MEDICAL CLAIMS LOOKUP CONTEXT
+
+- Curated categorical values:
+  - PAYER_1_SUBCHANNEL_NAME: Other / Government / Corrections, Other / Government / Champus - TRICARE, Other / Government / State or Local Program, Dual Medicaid / Medicare C-SNP, Dual Medicaid / Medicare / Unspecified, Medicaid / FFS, Medicare / FFS (Part B), Other / Unknown, Commercial / Cash or Self-Pay, Medicare / Advantage (Part C), Other / Liability / Auto Medical, Commercial / Voucher, Commercial / Health Insurance Marketplace, Commercial / Medicare / Supplemental (Part B), Medicaid / Unspecified, Medicare / Unspecified, Other / Government / Veterans Affairs, Medicaid / CHIP, Commercial / Discount Card, Medicare / FFS (Part A), Other / Other, Commercial / Behavioral, Dual Medicaid / PACE Program, Other / Government / Federal Program, Other / Liability / Workers' Compensation, Other / Liability / Life or Property, Medicare / Employer Group Waiver Plan, Commercial / Dental Marketplace, Commercial / Commercial, Commercial / Dental, Medicaid / Managed, Medicare / Advantage (Part D)
+  - PAYER_1_CHANNEL_NAME: Medicaid, Dual (Medicaid/Medicare), Other, Commercial, Medicare
+  - ENCOUNTER_CHANNEL_NM: Medicaid, Dual (Medicaid/Medicare), Other, Commercial, Medicare
+  - condition_label: Chronic Rhinosinusitis with Nasal Polyps, Psoriasis, Eosinophilic Esophagitis, Hidradenitis Suppurativa, Asthma, Alopecia, Ankylosing Spondylitis, Uveitis, Ulcerative Colitis, Axial Spondyloarthritis, Rheumatoid Arthritis, Atopic Dermatitis, Crohn's Disease, Psoriatic Arthritis, Juvenile Idiopathic Arthritis
 """
 
     def execute(self, parameters: Dict[str, Any], context: Any) -> ToolResult:
