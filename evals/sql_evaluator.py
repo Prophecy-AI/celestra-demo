@@ -85,6 +85,8 @@ Respond ONLY with the JSON object. No additional text."""
         Returns:
             Dictionary with evaluation scores and feedback
         """
+        if not os.getenv("ENABLE_EVALS", "false").lower() == "true":
+            return {"evaluation_disabled": True}
 
         try:
             print(f"🔍 SQL Evaluator: Calling OpenAI o3 for evaluation")
@@ -197,4 +199,6 @@ def evaluate_sql_correctness(sql: str, user_request: str, table_type: str) -> Di
     Returns:
         Dictionary with evaluation scores and feedback
     """
+    if not os.getenv("ENABLE_EVALS", "false").lower() == "true":
+        return {"evaluation_disabled": True}
     return sql_evaluator.evaluate_sql_sync(sql, user_request, table_type)

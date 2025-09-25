@@ -91,6 +91,8 @@ Respond ONLY with the JSON object. No additional text."""
         Returns:
             Dictionary with retrieval evaluation scores
         """
+        if not os.getenv("ENABLE_EVALS", "false").lower() == "true":
+            return {"evaluation_disabled": True}
 
         try:
             # Convert retrieved data to string representation
@@ -206,4 +208,6 @@ def evaluate_retrieval_relevancy(user_query: str, retrieved_data: Any,
     Returns:
         Dictionary with retrieval evaluation scores
     """
+    if not os.getenv("ENABLE_EVALS", "false").lower() == "true":
+        return {"evaluation_disabled": True}
     return retrieval_evaluator.evaluate_retrieval_sync(user_query, retrieved_data, sql_query)

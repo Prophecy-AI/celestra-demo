@@ -99,6 +99,9 @@ Respond ONLY with the JSON object. No additional text."""
         Returns:
             Dictionary with answer evaluation scores
         """
+        if not os.getenv("ENABLE_EVALS", "false").lower() == "true":
+            return {"evaluation_disabled": True}
+
         try:
             evaluation_prompt = f"""USER QUESTION: {user_question}
 
@@ -203,4 +206,6 @@ def evaluate_answer_relevancy(user_question: str, agent_answer: str,
     Returns:
         Dictionary with answer evaluation scores
     """
+    if not os.getenv("ENABLE_EVALS", "false").lower() == "true":
+        return {"evaluation_disabled": True}
     return answer_evaluator.evaluate_answer_sync(user_question, agent_answer, supporting_data)

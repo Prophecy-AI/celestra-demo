@@ -100,6 +100,9 @@ Respond ONLY with the JSON object. No additional text."""
         Returns:
             Dictionary with hallucination evaluation scores
         """
+        if not os.getenv("ENABLE_EVALS", "false").lower() == "true":
+            return {"evaluation_disabled": True}
+
         try:
             evaluation_prompt = f"""AGENT RESPONSE TO EVALUATE:
 {response}
@@ -204,4 +207,6 @@ def evaluate_hallucination(response: str, query_data: Optional[str] = None,
     Returns:
         Dictionary with hallucination evaluation scores
     """
+    if not os.getenv("ENABLE_EVALS", "false").lower() == "true":
+        return {"evaluation_disabled": True}
     return hallucination_evaluator.evaluate_response_sync(response, query_data, user_question)
