@@ -32,7 +32,7 @@ class BigQuerySQLQuery(Tool):
         sql = parameters["sql"]
         dataset_name = parameters["dataset_name"]
         tool_log("bigquery_sql", f"Executing query for dataset: {dataset_name}")
-        tool_log("bigquery_sql", f"SQL ({len(sql)} chars): {sql[:150]}...", "sql")
+        tool_log("bigquery_sql", f"SQL ({len(sql)} chars): {sql}...", "sql")
 
         try:
             # Validate SQL syntax basics

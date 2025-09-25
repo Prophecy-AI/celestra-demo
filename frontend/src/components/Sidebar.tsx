@@ -14,7 +14,7 @@ export default function Sidebar() {
 
   return (
     <div className="flex h-full w-64 flex-col bg-black">
-      <div className="flex h-16 shrink-0 items-center px-5 py-10">
+      <div className="flex h-16 shrink-0 items-center px-5 py-9">
         <div className="flex items-center space-x-3">
           <div className="h-8 w-8 bg-white rounded-sm flex items-center justify-center">
             <div className="grid grid-cols-2 gap-0.5">
@@ -27,7 +27,7 @@ export default function Sidebar() {
           <span className="text-white text-xl font-semibold">Celestra</span>
         </div>
       </div>
-      <nav className="flex flex-1 flex-col px-6 py-6">
+      <nav className="flex flex-1 flex-col px-4 py-4">
         <ul role="list" className="flex flex-1 flex-col gap-y-2">
           {navigation.map((item) => (
             <li key={item.name}>
