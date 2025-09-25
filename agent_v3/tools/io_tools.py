@@ -4,6 +4,9 @@ I/O tools for user communication and completion
 from typing import Dict, Any, List
 from .base import Tool, ToolResult
 
+from evals.hallucination_evaluator import evaluate_hallucination
+from evals.answer_evaluator import evaluate_answer_relevancy
+
 
 class Communicate(Tool):
     """Tool for communicating with the user"""
@@ -70,6 +73,36 @@ class Complete(Tool):
 
         summary = parameters["summary"]
         dataset_names = parameters["datasets"]
+
+        # Run evaluations on the final response
+        original_query = getattr(context, 'original_user_query', 'Query not available')
+
+        # Prepare supporting data from datasets
+        supporting_data = ""
+        if dataset_names:
+            for name in dataset_names:
+                df = context.get_dataframe(name)
+                if df is not None and not df.is_empty():
+                    supporting_data += f"\n{name}: {df.shape[0]} rows × {df.shape[1]} columns"
+
+        # Run evaluations
+        try:
+            hallucination_eval = evaluate_hallucination(summary, supporting_data, original_query)
+            score = hallucination_eval.get('overall_confidence', 'N/A')
+            reasoning = hallucination_eval.get('reasoning', 'No reasoning provided')
+            print(f"✅ Hallucination Evaluation: {score} - {reasoning}")
+        except Exception as e:
+            hallucination_eval = {"error": str(e)}
+            print(f"⚠️ Hallucination evaluation failed: {e}")
+
+        try:
+            answer_eval = evaluate_answer_relevancy(original_query, summary, supporting_data)
+            score = answer_eval.get('overall_relevancy', 'N/A')
+            reasoning = answer_eval.get('reasoning', 'No reasoning provided')
+            print(f"✅ Answer Evaluation: {score} - {reasoning}")
+        except Exception as e:
+            answer_eval = {"error": str(e)}
+            print(f"⚠️ Answer evaluation failed: {e}")
 
         # Use IOHandler if available
         io_handler = getattr(context, 'io_handler', None)
@@ -155,7 +188,9 @@ class Complete(Tool):
                 success=True,
                 data={
                     "feedback": user_feedback,
-                    "action": action
+                    "action": action,
+                    "hallucination_evaluation": hallucination_eval,
+                    "answer_evaluation": answer_eval
                 }
             )
 
@@ -164,6 +199,8 @@ class Complete(Tool):
                 success=True,
                 data={
                     "feedback": "Session interrupted by user",
-                    "action": "end"
+                    "action": "end",
+                    "hallucination_evaluation": hallucination_eval,
+                    "answer_evaluation": answer_eval
                 }
             )

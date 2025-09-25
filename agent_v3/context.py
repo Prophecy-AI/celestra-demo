@@ -36,6 +36,7 @@ class Context:
         self.recursion_depth = 0
         self.max_depth = 30
         self.created_at = datetime.now()
+        self.original_user_query: Optional[str] = None  # Store original query for evaluations
 
     def add_user_message(self, content: str) -> None:
         """Add user message to conversation history"""

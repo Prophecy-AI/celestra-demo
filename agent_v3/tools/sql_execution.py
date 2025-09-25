@@ -9,6 +9,7 @@ from google.cloud import bigquery
 from google.cloud.exceptions import GoogleCloudError
 from .base import Tool, ToolResult
 from .logger import tool_log
+from evals.retrieval_evaluator import evaluate_retrieval_relevancy
 
 
 class BigQuerySQLQuery(Tool):
@@ -88,6 +89,17 @@ class BigQuerySQLQuery(Tool):
             dataframe_display = str(df)
             tool_log("bigquery_sql", f"Dataset '{dataset_name}' ready with {len(df.columns)} columns", "success")
 
+            # Evaluate retrieval relevancy
+            try:
+                user_query = getattr(context, 'original_user_query', 'User query not available')
+                retrieval_eval = evaluate_retrieval_relevancy(user_query, df.to_dicts()[:100], sql)
+                score = retrieval_eval.get('overall_relevancy', 'N/A')
+                reasoning = retrieval_eval.get('reasoning', 'No reasoning provided')
+                print(f"✅ Retrieval Evaluation: {score} - {reasoning}")
+            except Exception as e:
+                retrieval_eval = {"error": str(e)}
+                print(f"⚠️ Retrieval evaluation failed: {e}")
+
             return ToolResult(
                 success=True,
                 data={
@@ -98,7 +110,8 @@ class BigQuerySQLQuery(Tool):
                     "dataset_name": dataset_name,
                     "csv_path": csv_path,
                     "sorting": sorting_desc,
-                    "execution_time": execution_time
+                    "execution_time": execution_time,
+                    "retrieval_evaluation": retrieval_eval
                 }
             )
 

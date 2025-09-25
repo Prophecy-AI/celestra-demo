@@ -7,6 +7,7 @@ import anthropic
 from typing import Dict, Any
 from .base import Tool, ToolResult
 from .logger import tool_log
+from evals.sql_evaluator import evaluate_sql_correctness
 
 
 class TextToSQLRx(Tool):
@@ -115,12 +116,23 @@ OUTPUT FORMAT:
             tool_log("text_to_sql_rx", f"SQL generated ({len(sql)} chars), scope: {scope}", "success")
             tool_log("text_to_sql_rx", f"SQL: {sql[:200]}...", "sql")
 
+            # Evaluate SQL correctness
+            try:
+                sql_eval = evaluate_sql_correctness(sql, request, "rx_claims")
+                score = sql_eval.get('overall_score', 'N/A')
+                reasoning = sql_eval.get('reasoning', 'No reasoning provided')
+                print(f"✅ SQL Evaluation: {score} - {reasoning}")
+            except Exception as e:
+                sql_eval = {"error": str(e)}
+                print(f"⚠️ SQL evaluation failed: {e}")
+
             return ToolResult(
                 success=True,
                 data={
                     "sql": sql,
                     "explanation": f"Query to find {self._extract_intent(request)}",
-                    "estimated_scope": scope
+                    "estimated_scope": scope,
+                    "evaluation": sql_eval
                 }
             )
 
@@ -257,11 +269,11 @@ OUTPUT FORMAT:
             return ToolResult(success=False, data={}, error=error)
 
         request = parameters["request"]
-        tool_log("text_to_sql_rx", f"Request: {request[:100]}...")
+        tool_log("text_to_sql_med", f"Request: {request[:100]}...")
 
         try:
             # Call LLM to generate SQL
-            tool_log("text_to_sql_rx", "Calling Claude for SQL generation")
+            tool_log("text_to_sql_med", "Calling Claude for SQL generation")
             response = self.client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=2048,
@@ -280,7 +292,7 @@ OUTPUT FORMAT:
 
             # Validate it looks like SQL
             if not sql.upper().startswith(('SELECT', 'WITH')):
-                tool_log("text_to_sql_rx", "Invalid SQL - doesn't start with SELECT/WITH", "error")
+                tool_log("text_to_sql_med", "Invalid SQL - doesn't start with SELECT/WITH", "error")
                 return ToolResult(
                     success=False,
                     data={},
@@ -289,20 +301,31 @@ OUTPUT FORMAT:
 
             # Extract estimated scope from the SQL
             scope = self._extract_scope(sql, request)
-            tool_log("text_to_sql_rx", f"SQL generated ({len(sql)} chars), scope: {scope}", "success")
-            tool_log("text_to_sql_rx", f"SQL: {sql[:200]}...", "sql")
+            tool_log("text_to_sql_med", f"SQL generated ({len(sql)} chars), scope: {scope}", "success")
+            tool_log("text_to_sql_med", f"SQL: {sql[:200]}...", "sql")
+
+            # Evaluate SQL correctness
+            try:
+                sql_eval = evaluate_sql_correctness(sql, request, "med_claims")
+                score = sql_eval.get('overall_score', 'N/A')
+                reasoning = sql_eval.get('reasoning', 'No reasoning provided')
+                print(f"✅ SQL Evaluation: {score} - {reasoning}")
+            except Exception as e:
+                sql_eval = {"error": str(e)}
+                print(f"⚠️ SQL evaluation failed: {e}")
 
             return ToolResult(
                 success=True,
                 data={
                     "sql": sql,
                     "explanation": f"Query to find {self._extract_intent(request)}",
-                    "estimated_scope": scope
+                    "estimated_scope": scope,
+                    "evaluation": sql_eval
                 }
             )
 
         except Exception as e:
-            tool_log("text_to_sql_rx", f"Failed: {str(e)}", "error")
+            tool_log("text_to_sql_med", f"Failed: {str(e)}", "error")
             return ToolResult(
                 success=False,
                 data={},

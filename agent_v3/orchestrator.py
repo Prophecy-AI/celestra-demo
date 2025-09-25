@@ -9,6 +9,7 @@ from .tools import get_all_tools
 from .prompts.system_prompt import MAIN_SYSTEM_PROMPT
 
 
+
 class RecursiveOrchestrator:
     """Main orchestrator that manages the recursive flow"""
 
@@ -41,6 +42,10 @@ class RecursiveOrchestrator:
 
         # Add initial user input to context
         self.context.add_user_message(initial_input)
+
+        # Store original query for evaluations (if not already set)
+        if not self.context.original_user_query:
+            self.context.original_user_query = initial_input
 
         # Start recursive loop
         result = self._recursive_loop()

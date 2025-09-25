@@ -1,5 +1,5 @@
 python-dotenv==1.1.1
-# openai==1.93.0
+openai
 anthropic
 polars
 e2b-code-interpreter
