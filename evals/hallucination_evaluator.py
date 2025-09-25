@@ -4,9 +4,18 @@ Detects hallucinations in final responses with medical domain knowledge
 """
 import os
 import asyncio
-import openai
 from typing import Dict, Any, Optional
 import json
+
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("🔍 Hallucination Evaluator: dotenv loaded")
+except ImportError:
+    print("🔍 Hallucination Evaluator: python-dotenv not available, using system env vars")
+
+import openai
 
 
 class HallucinationEvaluator:
@@ -102,12 +111,10 @@ QUERY DATA CONTEXT: {query_data or "Not provided"}
 Please evaluate this healthcare data analysis response for potential hallucinations, inaccuracies, or unsupported claims."""
 
             response_obj = await self.client.chat.completions.create(
-                model="o1-preview",
+                model="o3",
                 messages=[
                     {"role": "user", "content": f"{self.system_prompt}\n\n{evaluation_prompt}"}
-                ],
-                temperature=1,
-                max_tokens=2000
+                ]
             )
 
             result_text = response_obj.choices[0].message.content.strip()

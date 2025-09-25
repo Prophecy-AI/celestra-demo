@@ -4,9 +4,17 @@ Evaluates if retrieved data is relevant to user queries
 """
 import os
 import asyncio
-import openai
 from typing import Dict, Any, Optional, List
 import json
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("🔍 Retrieval Evaluator: dotenv loaded")
+except ImportError:
+    print("🔍 Retrieval Evaluator: python-dotenv not available, using system env vars")
+
+import openai
 
 
 class RetrievalEvaluator:
@@ -83,6 +91,7 @@ Respond ONLY with the JSON object. No additional text."""
         Returns:
             Dictionary with retrieval evaluation scores
         """
+
         try:
             # Convert retrieved data to string representation
             if isinstance(retrieved_data, (list, dict)):
@@ -100,12 +109,10 @@ RETRIEVED DATA:
 Please evaluate how well the retrieved data addresses the user's query and information needs."""
 
             response = await self.client.chat.completions.create(
-                model="o1-preview",
+                model="o3",
                 messages=[
                     {"role": "user", "content": f"{self.system_prompt}\n\n{evaluation_prompt}"}
-                ],
-                temperature=1,
-                max_tokens=2000
+                ]
             )
 
             result_text = response.choices[0].message.content.strip()
@@ -167,15 +174,19 @@ Please evaluate how well the retrieved data addresses the user's query and infor
         Returns:
             Dictionary with retrieval evaluation scores
         """
+        print(f"🔍 Retrieval Evaluator: Starting evaluation")
         try:
             loop = asyncio.get_event_loop()
-            return loop.run_until_complete(self.evaluate_retrieval(user_query, retrieved_data, sql_query))
+            result = loop.run_until_complete(self.evaluate_retrieval(user_query, retrieved_data, sql_query))
+            print(f"🔍 Retrieval Evaluator: Evaluation completed, score: {result.get('overall_relevancy', 'N/A')}")
+            return result
         except RuntimeError:
-            # Create new event loop if none exists
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                return loop.run_until_complete(self.evaluate_retrieval(user_query, retrieved_data, sql_query))
+                result = loop.run_until_complete(self.evaluate_retrieval(user_query, retrieved_data, sql_query))
+                print(f"🔍 Retrieval Evaluator: Evaluation completed, score: {result.get('overall_relevancy', 'N/A')}")
+                return result
             finally:
                 loop.close()
 

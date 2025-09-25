@@ -4,9 +4,18 @@ Evaluates if agent answers are relevant to user questions
 """
 import os
 import asyncio
-import openai
 from typing import Dict, Any, Optional
 import json
+
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("🔍 Answer Evaluator: dotenv loaded")
+except ImportError:
+    print("🔍 Answer Evaluator: python-dotenv not available, using system env vars")
+
+import openai
 
 
 class AnswerEvaluator:
@@ -101,21 +110,17 @@ SUPPORTING DATA CONTEXT: {supporting_data or "Not provided"}
 Please evaluate how well the agent's answer addresses the user's original question."""
 
             response = await self.client.chat.completions.create(
-                model="o1-preview",
+                model="o3",
                 messages=[
                     {"role": "user", "content": f"{self.system_prompt}\n\n{evaluation_prompt}"}
-                ],
-                temperature=1,
-                max_tokens=2000
+                ]
             )
 
             result_text = response.choices[0].message.content.strip()
 
-            # Parse JSON response
             try:
                 result = json.loads(result_text)
             except json.JSONDecodeError:
-                # Fallback if JSON parsing fails
                 result = {
                     "question_answering": 0.5,
                     "completeness": 0.5,

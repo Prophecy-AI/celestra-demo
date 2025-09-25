@@ -1,16 +1,5 @@
-<<<<<<< HEAD
-python-dotenv==1.1.1
-openai
-anthropic
-polars
-e2b-code-interpreter
-google-cloud-bigquery==3.21.0
-pyarrow
-langfuse
-opentelemetry-instrumentation-anthropic
-=======
-annotated-types==0.7.0                                                                      
-anthropic==0.68.0                                
+annotated-types==0.7.0
+anthropic==0.68.0
 anyio==4.11.0
 attrs==25.3.0
 cachetools==5.5.2
@@ -38,6 +27,9 @@ httpcore==1.0.9
 httpx==0.28.1
 idna==3.10
 jiter==0.11.0
+langfuse
+openai
+opentelemetry-instrumentation-anthropic
 packaging==25.0
 polars==1.33.1
 proto-plus==1.26.1
@@ -59,4 +51,3 @@ typing_extensions==4.15.0
 urllib3==2.5.0
 uvicorn==0.37.0
 websockets==15.0.1
->>>>>>> origin/mcp

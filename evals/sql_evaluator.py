@@ -4,9 +4,17 @@ Evaluates SQL generation quality using GPT-4
 """
 import os
 import asyncio
-import openai
 from typing import Dict, Any, Optional
 import json
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("🔍 SQL Evaluator: dotenv loaded")
+except ImportError:
+    print("🔍 SQL Evaluator: python-dotenv not available, using system env vars")
+
+import openai
 
 
 class SQLEvaluator:
@@ -77,7 +85,9 @@ Respond ONLY with the JSON object. No additional text."""
         Returns:
             Dictionary with evaluation scores and feedback
         """
+
         try:
+            print(f"🔍 SQL Evaluator: Calling OpenAI o3 for evaluation")
             evaluation_prompt = f"""USER REQUEST: {user_request}
 
 TABLE TYPE: {table_type}
@@ -90,20 +100,23 @@ GENERATED SQL:
 Please evaluate this SQL query according to the criteria and provide scores."""
 
             response = await self.client.chat.completions.create(
-                model="o1-preview",
+                model="o3",
                 messages=[
                     {"role": "user", "content": f"{self.system_prompt}\n\n{evaluation_prompt}"}
-                ],
-                temperature=1,
-                max_tokens=2000
+                ]
             )
+            print(f"🔍 SQL Evaluator: OpenAI API call completed")
 
             result_text = response.choices[0].message.content.strip()
+            print(f"🔍 SQL Evaluator: Raw response length: {len(result_text)} chars")
+            print(f"🔍 SQL Evaluator: Response preview: {result_text[:200]}...")
 
             # Parse JSON response
             try:
                 result = json.loads(result_text)
-            except json.JSONDecodeError:
+                print(f"🔍 SQL Evaluator: Successfully parsed JSON, overall_score: {result.get('overall_score', 'missing')}")
+            except json.JSONDecodeError as e:
+                print(f"🔍 SQL Evaluator: JSON parsing failed: {e}")
                 # Fallback if JSON parsing fails
                 result = {
                     "syntax_correctness": 0.5,
@@ -129,6 +142,7 @@ Please evaluate this SQL query according to the criteria and provide scores."""
             return result
 
         except Exception as e:
+            print(f"🔍 SQL Evaluator: Exception in async evaluate_sql: {e}")
             return {
                 "syntax_correctness": 0.0,
                 "query_logic": 0.0,
@@ -152,15 +166,19 @@ Please evaluate this SQL query according to the criteria and provide scores."""
         Returns:
             Dictionary with evaluation scores and feedback
         """
+        print(f"🔍 SQL Evaluator: Starting evaluation for {table_type}")
         try:
             loop = asyncio.get_event_loop()
-            return loop.run_until_complete(self.evaluate_sql(sql, user_request, table_type))
+            result = loop.run_until_complete(self.evaluate_sql(sql, user_request, table_type))
+            print(f"🔍 SQL Evaluator: Evaluation completed, score: {result.get('overall_score', 'N/A')}")
+            return result
         except RuntimeError:
-            # Create new event loop if none exists
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                return loop.run_until_complete(self.evaluate_sql(sql, user_request, table_type))
+                result = loop.run_until_complete(self.evaluate_sql(sql, user_request, table_type))
+                print(f"🔍 SQL Evaluator: Evaluation completed, score: {result.get('overall_score', 'N/A')}")
+                return result
             finally:
                 loop.close()
 
