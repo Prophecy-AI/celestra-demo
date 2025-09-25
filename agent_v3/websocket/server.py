@@ -56,7 +56,7 @@ async def download_csv(session_id: str, filename: str):
         raise HTTPException(status_code=400, detail="Only CSV files can be downloaded")
 
     # Build file path
-    file_path = Path(f"output/session_{safe_session}/{safe_filename}")
+    file_path = Path("output") / f"session_{safe_session}" / safe_filename
 
     # Check if file exists
     if not file_path.exists():
