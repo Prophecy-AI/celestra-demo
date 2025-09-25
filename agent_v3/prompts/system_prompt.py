@@ -27,7 +27,7 @@ Tools:
 - text_to_sql_med: Generate SQL for medical claims/diagnosis data
   Parameters: {"request": "natural language description"}
 
-- text_to_sql_provider_payment: Generate SQL for healthcare providers payment data
+- text_to_sql_provider_payments: Generate SQL for healthcare providers payment data
   Parameters: {"request": "natural language description"}
 
 - text_to_sql_providers_bio: Generate SQL for healthcare providers biographical data
