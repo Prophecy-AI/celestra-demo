@@ -494,11 +494,11 @@ OUTPUT FORMAT:
             return ToolResult(success=False, data={}, error=error)
 
         request = parameters["request"]
-        tool_log("text_to_sql_rx", f"Request: {request[:100]}...")
+        tool_log("text_to_sql_provider_payments", f"Request: {request[:100]}...")
 
         try:
             # Call LLM to generate SQL
-            tool_log("text_to_sql_rx", "Calling Claude for SQL generation")
+            tool_log("text_to_provider_payments", "Calling Claude for SQL generation")
             response = self.client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=2048,
@@ -517,7 +517,7 @@ OUTPUT FORMAT:
 
             # Validate it looks like SQL
             if not sql.upper().startswith(('SELECT', 'WITH')):
-                tool_log("text_to_sql_rx", "Invalid SQL - doesn't start with SELECT/WITH", "error")
+                tool_log("text_to_sql_providers_payments", "Invalid SQL - doesn't start with SELECT/WITH", "error")
                 return ToolResult(
                     success=False,
                     data={},
@@ -526,8 +526,8 @@ OUTPUT FORMAT:
 
             # Extract estimated scope from the SQL
             scope = self._extract_scope(sql, request)
-            tool_log("text_to_sql_rx", f"SQL generated ({len(sql)} chars), scope: {scope}", "success")
-            tool_log("text_to_sql_rx", f"SQL: {sql[:200]}...", "sql")
+            tool_log("text_to_sql_providers_payments", f"SQL generated ({len(sql)} chars), scope: {scope}", "success")
+            tool_log("text_to_sql_providers_payments", f"SQL: {sql[:200]}...", "sql")
 
             return ToolResult(
                 success=True,
@@ -539,7 +539,7 @@ OUTPUT FORMAT:
             )
 
         except Exception as e:
-            tool_log("text_to_sql_rx", f"Failed: {str(e)}", "error")
+            tool_log("text_to_sql_providers_payments", f"Failed: {str(e)}", "error")
             return ToolResult(
                 success=False,
                 data={},
@@ -699,11 +699,11 @@ OUTPUT FORMAT:
             return ToolResult(success=False, data={}, error=error)
 
         request = parameters["request"]
-        tool_log("text_to_sql_rx", f"Request: {request[:100]}...")
+        tool_log("text_to_sql_providers_bio", f"Request: {request[:100]}...")
 
         try:
             # Call LLM to generate SQL
-            tool_log("text_to_sql_rx", "Calling Claude for SQL generation")
+            tool_log("text_to_sql_providers_bio", "Calling Claude for SQL generation")
             response = self.client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=2048,
@@ -722,7 +722,7 @@ OUTPUT FORMAT:
 
             # Validate it looks like SQL
             if not sql.upper().startswith(('SELECT', 'WITH')):
-                tool_log("text_to_sql_rx", "Invalid SQL - doesn't start with SELECT/WITH", "error")
+                tool_log("text_to_sql_providers_bio", "Invalid SQL - doesn't start with SELECT/WITH", "error")
                 return ToolResult(
                     success=False,
                     data={},
@@ -731,8 +731,8 @@ OUTPUT FORMAT:
 
             # Extract estimated scope from the SQL
             scope = self._extract_scope(sql, request)
-            tool_log("text_to_sql_rx", f"SQL generated ({len(sql)} chars), scope: {scope}", "success")
-            tool_log("text_to_sql_rx", f"SQL: {sql[:200]}...", "sql")
+            tool_log("text_to_sql_providers_bio", f"SQL generated ({len(sql)} chars), scope: {scope}", "success")
+            tool_log("text_to_sql_providers_bio", f"SQL: {sql[:200]}...", "sql")
 
             return ToolResult(
                 success=True,
@@ -744,7 +744,7 @@ OUTPUT FORMAT:
             )
 
         except Exception as e:
-            tool_log("text_to_sql_rx", f"Failed: {str(e)}", "error")
+            tool_log("text_to_sql_providers_bio", f"Failed: {str(e)}", "error")
             return ToolResult(
                 success=False,
                 data={},
