@@ -8,7 +8,13 @@ import argparse
 from datetime import datetime
 from dotenv import load_dotenv
 from .orchestrator import RecursiveOrchestrator
-
+from langfuse import Langfuse, observe, get_client
+langfuse = Langfuse(
+  secret_key="sk-lf-36a3d084-014d-4cf3-bab8-617de866ee15",
+  public_key="pk-lf-3748c8d9-17ff-41bd-b492-f055bc005570",
+  host="https://us.cloud.langfuse.com"
+)
+langfuse = get_client()
 
 def validate_environment():
     """Validate required environment variables"""
@@ -103,7 +109,6 @@ def run_interactive(debug: bool = False):
                 import traceback
                 traceback.print_exc()
 
-
 def run_single_query(query: str, debug: bool = False):
     """Run a single query and exit"""
     validate_environment()
@@ -130,7 +135,7 @@ def run_single_query(query: str, debug: bool = False):
     else:
         print(f"\n❌ Query failed: {result.get('error', 'Unknown error')}")
 
-
+@observe
 def main():
     """Main entry point with CLI argument parsing"""
     parser = argparse.ArgumentParser(

@@ -5,3 +5,5 @@ polars
 e2b-code-interpreter
 google-cloud-bigquery==3.21.0
 pyarrow
+langfuse
+opentelemetry-instrumentation-anthropic

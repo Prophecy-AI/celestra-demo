@@ -6,7 +6,9 @@ import json
 import re
 from typing import Dict, Any, List, Optional
 import anthropic
-
+from opentelemetry.instrumentation.anthropic import AnthropicInstrumentor
+ 
+AnthropicInstrumentor().instrument()
 
 class LLMClient:
     """Client for interacting with Claude via Anthropic API"""
