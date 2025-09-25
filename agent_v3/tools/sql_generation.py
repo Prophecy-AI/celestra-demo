@@ -360,3 +360,399 @@ OUTPUT FORMAT:
             scope_parts.append("with date filters")
 
         return " ".join(scope_parts) if scope_parts else "All relevant data"
+
+
+class TextToSQLProviderPayments(Tool):
+    """Generate SQL for provider_payment table queries"""
+    def __init__(self):
+        super().__init__(
+            name="text_to_sql_provider_payments",
+            description="Convert natural language request to SQL for provider_payments table"
+        )
+        self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        self.system_prompt = self._build_system_prompt()
+
+    def _build_system_prompt(self) -> str:
+        """Build the system prompt with data dictionary"""
+        return """
+You are a BigQuery Standard SQL generator for Healthcare Providers Payments data analysis.
+
+TASK: Convert natural language queries into executable BigQuery Standard SQL.
+
+CRITICAL: Output ONLY the SQL query. No explanations, no descriptions, no text before or after the SQL.
+
+TABLE: `unique-bonbon-472921-q8.HCP.provider_payments`
+
+KEY COLUMNS:
+- npi_number: STRING - National Provider Identifier
+- associated_product: STRING - Associated product
+- nature_of_payment: STRING - Nature of payment
+- payer_company: STRING - Payer company
+- product_type: STRING - Product type
+- program_year: INTEGER - Program year
+- record_id: STRING - Record ID
+- total_payment_amount: FLOAT -Total payment amount
+
+COLUMN SELECTION PRIORITY:
+- For provider payment queries: Include ONLY npi_number and requested metrics
+- NEVER use SELECT * - be extremely selective with columns
+
+AGGREGATION RULES:
+- For counting providers: COUNT(DISTINCT npi_number)
+- For total payment amount: SUM(total_payment_amount)
+- For total payment amount by product type: SUM(total_payment_amount) GROUP BY product_type
+- For total payment amount by payer company: SUM(total_payment_amount) GROUP BY payer_company
+- For total payment amount by program year: SUM(total_payment_amount) GROUP BY program_year
+- For total payment amount by record id: SUM(total_payment_amount) GROUP BY record_id
+
+ITEM MATCHING:
+- Use UPPER() for case-insensitive item matching
+- Check multiple name fields: associated_product, nature_of_payment, payer_company, product_type, program_year, record_id
+
+OUTPUT FORMAT:
+- Return clean, executable BigQuery Standard SQL
+- Include appropriate GROUP BY when using aggregations
+- Add ORDER BY for meaningful result ordering
+- LIMIT results appropriately (typically 100-1000 rows)
+"""
+
+    def execute(self, parameters: Dict[str, Any], context: Any) -> ToolResult:
+        """Generate SQL from natural language request"""
+        error = self.validate_parameters(parameters, ["request"])
+        if error:
+            return ToolResult(success=False, data={}, error=error)
+
+        request = parameters["request"]
+        tool_log("text_to_sql_rx", f"Request: {request[:100]}...")
+
+        try:
+            # Call LLM to generate SQL
+            tool_log("text_to_sql_rx", "Calling Claude for SQL generation")
+            response = self.client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=2048,
+                temperature=0,
+                system=self.system_prompt,
+                messages=[{"role": "user", "content": request}]
+            )
+
+            # Extract SQL from response
+            sql = response.content[0].text.strip()
+
+            # Clean up SQL (remove markdown if present)
+            sql = re.sub(r'^```sql\s*', '', sql)
+            sql = re.sub(r'\s*```$', '', sql)
+            sql = sql.strip()
+
+            # Validate it looks like SQL
+            if not sql.upper().startswith(('SELECT', 'WITH')):
+                tool_log("text_to_sql_rx", "Invalid SQL - doesn't start with SELECT/WITH", "error")
+                return ToolResult(
+                    success=False,
+                    data={},
+                    error="Generated text does not appear to be valid SQL"
+                )
+
+            # Extract estimated scope from the SQL
+            scope = self._extract_scope(sql, request)
+            tool_log("text_to_sql_rx", f"SQL generated ({len(sql)} chars), scope: {scope}", "success")
+            tool_log("text_to_sql_rx", f"SQL: {sql[:200]}...", "sql")
+
+            return ToolResult(
+                success=True,
+                data={
+                    "sql": sql,
+                    "explanation": f"Query to find {self._extract_intent(request)}",
+                    "estimated_scope": scope
+                }
+            )
+
+        except Exception as e:
+            tool_log("text_to_sql_rx", f"Failed: {str(e)}", "error")
+            return ToolResult(
+                success=False,
+                data={},
+                error=f"SQL generation failed: {str(e)}"
+            )
+
+    def _extract_intent(self, request: str) -> str:
+        """Extract the main intent from the request"""
+        request_lower = request.lower()
+
+        if "payment" in request_lower or "amount" in request_lower or "total" in request_lower:
+            return "provider payment amounts"
+        elif "payer" in request_lower or "company" in request_lower:
+            return "payer companies"
+        elif "product" in request_lower or "drug" in request_lower or "associated product" in request_lower:
+            return "associated products"
+        elif "nature" in request_lower and "payment" in request_lower:
+            return "nature of payment"
+        elif "program year" in request_lower or "year" in request_lower:
+            return "program year"
+        elif "record id" in request_lower or "id" in request_lower:
+            return "payment record id"
+        elif "provider" in request_lower or "npi" in request_lower or "doctor" in request_lower:
+            return "provider payment data"
+        else:
+            return "healthcare provider payment data"
+
+    def _extract_scope(self, sql: str, request: str) -> str:
+        """Extract the scope of the query"""
+        sql_upper = sql.upper()
+
+        # Extract possible scope elements from the SQL for providers_bio
+
+        # Look for specialty
+        specialty_match = re.search(r"SPECIALTY\s*=\s*'([^']+)'", sql, re.IGNORECASE)
+        specialty = specialty_match.group(1) if specialty_match else None
+
+        # Look for certifications (array field, may use UNNEST or LIKE)
+        cert_match = re.search(r"CERTIFICATIONS.*(?:LIKE|=)\s+'%?([^'%]+)%?'", sql, re.IGNORECASE)
+        certification = cert_match.group(1) if cert_match else None
+
+        # Look for education (array field)
+        education_match = re.search(r"EDUCATION.*(?:LIKE|=)\s+'%?([^'%]+)%?'", sql, re.IGNORECASE)
+        education = education_match.group(1) if education_match else None
+
+        # Look for awards (array field)
+        awards_match = re.search(r"AWARDS.*(?:LIKE|=)\s+'%?([^'%]+)%?'", sql, re.IGNORECASE)
+        award = awards_match.group(1) if awards_match else None
+
+        # Look for memberships (array field)
+        membership_match = re.search(r"MEMBERSHIPS.*(?:LIKE|=)\s+'%?([^'%]+)%?'", sql, re.IGNORECASE)
+        membership = membership_match.group(1) if membership_match else None
+
+        # Look for conditions treated (array field)
+        conditions_match = re.search(r"CONDITIONS_TREATED.*(?:LIKE|=)\s+'%?([^'%]+)%?'", sql, re.IGNORECASE)
+        condition = conditions_match.group(1) if conditions_match else None
+
+        # Look for title
+        title_match = re.search(r"TITLE\s*=\s*'([^']+)'", sql, re.IGNORECASE)
+        title = title_match.group(1) if title_match else None
+
+        # Look for npi_number
+        npi_match = re.search(r"NPI_NUMBER\s*=\s*'([^']+)'", sql, re.IGNORECASE)
+        npi_number = npi_match.group(1) if npi_match else None
+
+        # Look for state (sometimes in specialty or address, but not a direct column in providers_bio)
+        # If state is referenced in the request, try to extract it
+        state_match = re.search(r"STATE\s*=\s*'([^']+)'", sql, re.IGNORECASE)
+        state = state_match.group(1) if state_match else None
+
+        # Build scope description
+        scope_parts = []
+
+        if npi_number:
+            scope_parts.append(f"npi_number: {npi_number}")
+        if title:
+            scope_parts.append(f"title: {title}")
+        if specialty:
+            scope_parts.append(f"specialty: {specialty}")
+        if certification:
+            scope_parts.append(f"certification: {certification}")
+        if education:
+            scope_parts.append(f"education: {education}")
+        if award:
+            scope_parts.append(f"award: {award}")
+        if membership:
+            scope_parts.append(f"membership: {membership}")
+        if condition:
+            scope_parts.append(f"condition treated: {condition}")
+        if state:
+            scope_parts.append(f"state: {state}")
+
+        if not scope_parts:
+            scope_parts.append("provider biographical data")
+
+        return " ".join(scope_parts) if scope_parts else "All relevant data"
+
+
+class TextToSQLProvidersBio(Tool):
+    """Generate SQL for rx_claims table queries"""
+
+    def __init__(self):
+        super().__init__(
+            name="text_to_sql_providers_bio",
+            description="Convert natural language request to SQL for providers_bio table"
+        )
+        self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        self.system_prompt = self._build_system_prompt()
+
+    def _build_system_prompt(self) -> str:
+        """Build the system prompt with data dictionary"""
+        return """
+You are a BigQuery Standard SQL generator for Healthcare Providers Biographical data analysis.
+
+TASK: Convert natural language queries into executable BigQuery Standard SQL.
+
+CRITICAL: Output ONLY the SQL query. No explanations, no descriptions, no text before or after the SQL.
+
+TABLE: `unique-bonbon-472921-q8.HCP.providers_bio`
+
+KEY COLUMNS:
+- npi_number: STRING - National Provider Identifier
+- title: STRING - Professional title of the provider
+- specialty: STRING - Medical specialty
+- certifications: ARRAY<STRING> - Certifications held by the provider
+- education: ARRAY<STRING> - Educational background of the provider
+- awards: ARRAY<STRING> - Awards received by the provider
+- memberships: ARRAY<STRING> - Professional memberships of the provider
+- conditions_treated: ARRAY<STRING> - Conditions treated by the provider
+
+COLUMN SELECTION PRIORITY:
+- NEVER use SELECT * - be extremely selective with columns
+
+AGGREGATION RULES:
+- For counting providers: COUNT(DISTINCT npi_number)
+
+ITEM MATCHING:
+- Use UPPER() for case-insensitive item matching
+- Check multiple name fields: certifications, education, awards, memberships, conditions_treated
+- Example: WHERE EXISTS (
+  SELECT 1
+  FROM UNNEST(field) AS something
+  WHERE UPPER(something) LIKE '%item%'
+);
+
+OUTPUT FORMAT:
+- Return clean, executable BigQuery Standard SQL
+- Include appropriate GROUP BY when using aggregations
+- Add ORDER BY for meaningful result ordering
+- LIMIT results appropriately (typically 100-1000 rows)
+"""
+
+    def execute(self, parameters: Dict[str, Any], context: Any) -> ToolResult:
+        """Generate SQL from natural language request"""
+        error = self.validate_parameters(parameters, ["request"])
+        if error:
+            return ToolResult(success=False, data={}, error=error)
+
+        request = parameters["request"]
+        tool_log("text_to_sql_rx", f"Request: {request[:100]}...")
+
+        try:
+            # Call LLM to generate SQL
+            tool_log("text_to_sql_rx", "Calling Claude for SQL generation")
+            response = self.client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=2048,
+                temperature=0,
+                system=self.system_prompt,
+                messages=[{"role": "user", "content": request}]
+            )
+
+            # Extract SQL from response
+            sql = response.content[0].text.strip()
+
+            # Clean up SQL (remove markdown if present)
+            sql = re.sub(r'^```sql\s*', '', sql)
+            sql = re.sub(r'\s*```$', '', sql)
+            sql = sql.strip()
+
+            # Validate it looks like SQL
+            if not sql.upper().startswith(('SELECT', 'WITH')):
+                tool_log("text_to_sql_rx", "Invalid SQL - doesn't start with SELECT/WITH", "error")
+                return ToolResult(
+                    success=False,
+                    data={},
+                    error="Generated text does not appear to be valid SQL"
+                )
+
+            # Extract estimated scope from the SQL
+            scope = self._extract_scope(sql, request)
+            tool_log("text_to_sql_rx", f"SQL generated ({len(sql)} chars), scope: {scope}", "success")
+            tool_log("text_to_sql_rx", f"SQL: {sql[:200]}...", "sql")
+
+            return ToolResult(
+                success=True,
+                data={
+                    "sql": sql,
+                    "explanation": f"Query to find {self._extract_intent(request)}",
+                    "estimated_scope": scope
+                }
+            )
+
+        except Exception as e:
+            tool_log("text_to_sql_rx", f"Failed: {str(e)}", "error")
+            return ToolResult(
+                success=False,
+                data={},
+                error=f"SQL generation failed: {str(e)}"
+            )
+
+    def _extract_intent(self, request: str) -> str:
+        """Extract the main intent from the request"""
+        request_lower = request.lower()
+
+        if "specialty" in request_lower:
+            return "provider specialties"
+        elif "certification" in request_lower:
+            return "provider certifications"
+        elif "education" in request_lower or "school" in request_lower or "university" in request_lower:
+            return "provider education"
+        elif "award" in request_lower:
+            return "provider awards"
+        elif "membership" in request_lower:
+            return "provider memberships"
+        elif "condition" in request_lower and "treat" in request_lower:
+            return "conditions treated by providers"
+        elif "provider" in request_lower or "npi" in request_lower:
+            return "provider biographical data"
+        else:
+            return "healthcare provider data"
+
+    def _extract_scope(self, sql: str, request: str) -> str:
+        """Extract the scope of the query"""
+        sql_upper = sql.upper()
+
+        # Look for specialty
+        specialty_match = re.search(r"SPECIALTY\s*=\s*'([^']+)'", sql, re.IGNORECASE)
+        specialty = specialty_match.group(1) if specialty_match else None
+
+        # Look for certifications
+        cert_match = re.search(r"CERTIFICATIONS\s+LIKE\s+'%([^%]+)%'", sql, re.IGNORECASE)
+        certification = cert_match.group(1) if cert_match else None
+
+        # Look for education
+        education_match = re.search(r"EDUCATION\s+LIKE\s+'%([^%]+)%'", sql, re.IGNORECASE)
+        education = education_match.group(1) if education_match else None
+
+        # Look for awards
+        awards_match = re.search(r"AWARDS\s+LIKE\s+'%([^%]+)%'", sql, re.IGNORECASE)
+        award = awards_match.group(1) if awards_match else None
+
+        # Look for memberships
+        membership_match = re.search(r"MEMBERSHIPS\s+LIKE\s+'%([^%]+)%'", sql, re.IGNORECASE)
+        membership = membership_match.group(1) if membership_match else None
+
+        # Look for conditions treated
+        conditions_match = re.search(r"CONDITIONS_TREATED\s+LIKE\s+'%([^%]+)%'", sql, re.IGNORECASE)
+        condition = conditions_match.group(1) if conditions_match else None
+
+        # Look for state
+        state_match = re.search(r"STATE\s*=\s*'([^']+)'", sql, re.IGNORECASE)
+        state = state_match.group(1) if state_match else None
+
+        # Build scope description
+        scope_parts = []
+
+        if specialty:
+            scope_parts.append(f"specialty: {specialty}")
+        if certification:
+            scope_parts.append(f"certification: {certification}")
+        if education:
+            scope_parts.append(f"education: {education}")
+        if award:
+            scope_parts.append(f"award: {award}")
+        if membership:
+            scope_parts.append(f"membership: {membership}")
+        if condition:
+            scope_parts.append(f"condition treated: {condition}")
+        if state:
+            scope_parts.append(f"state: {state}")
+
+        if not scope_parts:
+            scope_parts.append("provider biographical data")
+
+        return " ".join(scope_parts) if scope_parts else "All relevant data"
+

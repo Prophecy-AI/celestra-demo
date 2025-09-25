@@ -27,6 +27,12 @@ Tools:
 - text_to_sql_med: Generate SQL for medical claims/diagnosis data
   Parameters: {"request": "natural language description"}
 
+- text_to_sql_provider_payment: Generate SQL for healthcare providers payment data
+  Parameters: {"request": "natural language description"}
+
+- text_to_sql_providers_bio: Generate SQL for healthcare providers biographical data
+  Parameters: {"request": "natural language description"}
+
 - bigquery_sql_query: Execute SQL and get results
   Parameters: {"sql": "SQL query", "dataset_name": "descriptive_name"}
 
@@ -64,6 +70,26 @@ MED_CLAIMS (Medical Claims) - Table: `unique-bonbon-472921-q8.Claims.medical_cla
 - RENDERING_PROVIDER_STATE: State
 - STATEMENT_FROM_DD: Service date
 - CLAIM_CHARGE_AMT: Charge amount
+
+PROVIDER_PAYMENTS (Healthcare Providers Payments) - Table: `unique-bonbon-472921-q8.HCP.provider_payments`
+- npi_number: National Provider Identifier
+- associated_product: Associated product
+- nature_of_payment: Nature of payment
+- payer_company: Payer company
+- product_type: Product type
+- program_year: Program year
+- record_id: Record ID
+- total_payment_amount: Total payment amount
+
+PROVIDERS_BIO (Healthcare Providers Biographical) - Table: `unique-bonbon-472921-q8.HCP.providers_bio`
+- npi_number: National Provider Identifier
+- title: Professional title
+- specialty: Medical specialty
+- certifications: Certifications held by the provider
+- education: Educational background of the provider
+- awards: Awards received by the provider
+- memberships: Professional memberships of the provider
+- conditions_treated: Conditions treated by the provider
 
 ## GUIDELINES
 
