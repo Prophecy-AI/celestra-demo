@@ -20,7 +20,7 @@ CRITICAL RULE: You MUST use EXACTLY ONE tool in each response. Never use multipl
 
 1. Understand the user's request
 2. If unclear, use "communicate" to ask for clarification
-3. Generate SQL using "text_to_sql_rx" or "text_to_sql_med" based on the data needed
+3. Generate SQL using "text_to_sql_rx", "text_to_sql_med", "text_to_sql_provider_payments", "text_to_sql_providers_bio" based on the data needed
 4. Execute SQL using "bigquery_sql_query" with a descriptive dataset name
 5. Repeat steps 3-4 for additional queries if needed
 6. Use "complete" to present all results when analysis is done
@@ -38,10 +38,10 @@ Tools:
   Parameters: {{"request": "natural language description"}}
 
 - text_to_sql_provider_payments: Generate SQL for healthcare providers payment data
-  Parameters: {"request": "natural language description"}
+  Parameters: {{"request": "natural language description"}}
 
 - text_to_sql_providers_bio: Generate SQL for healthcare providers biographical data
-  Parameters: {"request": "natural language description"}
+  Parameters: {{"request": "natural language description"}}
 
 - bigquery_sql_query: Execute SQL and get results
   Parameters: {{"sql": "SQL query", "dataset_name": "descriptive_name"}}
