@@ -6,7 +6,8 @@ from typing import Dict, Any, Optional
 from .context import Context
 from .llm_client import LLMClient
 from .tools import get_all_tools
-from .prompts.system_prompt import MAIN_SYSTEM_PROMPT
+from .prompts.system_prompt import get_main_system_prompt
+from .exceptions import ConnectionLostError, ToolExecutionError, MaxRecursionError
 
 
 class RecursiveOrchestrator:
@@ -42,18 +43,28 @@ class RecursiveOrchestrator:
         # Add initial user input to context
         self.context.add_user_message(initial_input)
 
-        # Start recursive loop
-        result = self._recursive_loop()
+        try:
+            # Start recursive loop
+            result = self._recursive_loop()
+            
+            # Get final summary
+            summary = self.context.get_summary()
 
-        # Get final summary
-        summary = self.context.get_summary()
-
-        return {
-            "success": result.get("completed", False),
-            "summary": summary,
-            "datasets": self.context.get_all_datasets(),
-            "error": result.get("error")
-        }
+            return {
+                "success": result.get("completed", False),
+                "summary": summary,
+                "datasets": self.context.get_all_datasets(),
+                "error": result.get("error")
+            }
+        except (ConnectionLostError, MaxRecursionError) as e:
+            # These are terminal errors - return immediately
+            self.log(f"Terminal error: {str(e)}")
+            return {
+                "success": False,
+                "summary": self.context.get_summary(),
+                "datasets": self.context.get_all_datasets(),
+                "error": str(e)
+            }
 
     def _recursive_loop(self, depth: int = 0) -> Dict[str, Any]:
         """
@@ -68,10 +79,7 @@ class RecursiveOrchestrator:
         # Check recursion depth
         if not self.context.increment_depth():
             self.log(f"Max recursion depth ({self.context.max_depth}) reached")
-            return {
-                "completed": False,
-                "error": f"Maximum recursion depth ({self.context.max_depth}) reached"
-            }
+            raise MaxRecursionError(f"Maximum recursion depth ({self.context.max_depth}) reached")
 
         self.log(f"Recursion depth: {depth}")
 
@@ -97,7 +105,7 @@ class RecursiveOrchestrator:
             self.log("Calling LLM for tool selection...")
             tool_call = self.llm_client.create_message(
                 messages=messages,
-                system_prompt=MAIN_SYSTEM_PROMPT,
+                system_prompt=get_main_system_prompt(),
                 available_tools=self.tool_names
             )
 
@@ -143,6 +151,12 @@ class RecursiveOrchestrator:
             else:
                 self.log(f"Tool executed successfully")
 
+        except ConnectionLostError as e:
+            # Connection errors are non-recoverable - stop execution
+            error = f"Connection lost: {str(e)}"
+            self.log(f"ERROR: {error}")
+            self.context.add_tool_error(tool_name, tool_params, error)
+            return {"completed": False, "error": error}
         except Exception as e:
             error = f"Tool execution exception: {str(e)}"
             self.log(f"ERROR: {error}")
