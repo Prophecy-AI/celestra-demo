@@ -46,6 +46,72 @@ class AsyncWebSocketHandler:
             "text": message
         }))
 
+    def send_reasoning_trace(self, trace: str) -> None:
+        """Send reasoning trace to WebSocket client (sync wrapper for async)"""
+        try:
+            asyncio.run_coroutine_threadsafe(
+                self._send_reasoning_trace_async(trace),
+                self.loop
+            ).result(timeout=5.0)
+        except (websockets.exceptions.ConnectionClosed, 
+                websockets.exceptions.ConnectionClosedOK,
+                websockets.exceptions.ConnectionClosedError) as e:
+            raise ConnectionLostError(f"WebSocket connection closed: {e}")
+        except Exception as e:
+            print(f"Error sending reasoning trace: {e}")
+
+    async def _send_reasoning_trace_async(self, trace: str) -> None:
+        """Async send reasoning trace"""
+        await self.websocket.send(json.dumps({
+            "type": "reasoning",
+            "text": trace
+        }))
+
+    def send_data_table(self, data: list, filename: str, session_id: str) -> None:
+        """Send data table to WebSocket client (sync wrapper for async)"""
+        try:
+            asyncio.run_coroutine_threadsafe(
+                self._send_data_table_async(data, filename, session_id),
+                self.loop
+            ).result(timeout=5.0)
+        except (websockets.exceptions.ConnectionClosed, 
+                websockets.exceptions.ConnectionClosedOK,
+                websockets.exceptions.ConnectionClosedError) as e:
+            raise ConnectionLostError(f"WebSocket connection closed: {e}")
+        except Exception as e:
+            print(f"Error sending data table: {e}")
+
+    async def _send_data_table_async(self, data: list, filename: str, session_id: str) -> None:
+        """Async send data table"""
+        await self.websocket.send(json.dumps({
+            "type": "data_table",
+            "data": data,
+            "filename": filename,
+            "sessionId": session_id
+        }))
+
+    def send_action_status(self, action: str, description: str) -> None:
+        """Send action status to WebSocket client (sync wrapper for async)"""
+        try:
+            asyncio.run_coroutine_threadsafe(
+                self._send_action_status_async(action, description),
+                self.loop
+            ).result(timeout=5.0)
+        except (websockets.exceptions.ConnectionClosed, 
+                websockets.exceptions.ConnectionClosedOK,
+                websockets.exceptions.ConnectionClosedError) as e:
+            raise ConnectionLostError(f"WebSocket connection closed: {e}")
+        except Exception as e:
+            print(f"Error sending action status: {e}")
+
+    async def _send_action_status_async(self, action: str, description: str) -> None:
+        """Async send action status"""
+        await self.websocket.send(json.dumps({
+            "type": "action_status",
+            "action": action,
+            "description": description
+        }))
+
     def get_user_input(self, prompt: str = "") -> str:
         """Get input from WebSocket client (sync wrapper for async)"""
         # Update state to waiting for input

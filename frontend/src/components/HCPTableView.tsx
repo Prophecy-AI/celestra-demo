@@ -15,6 +15,7 @@ interface HCP {
 interface HCPTableViewProps {
   clusterName?: string;
   onBack?: () => void;
+  data?: any[];
 }
 
 const mockHCPs: HCP[] = [
@@ -200,8 +201,12 @@ const mockHCPs: HCP[] = [
   }
 ];
 
-export default function HCPTableView({ clusterName, onBack }: HCPTableViewProps) {
+export default function HCPTableView({ clusterName, onBack, data }: HCPTableViewProps) {
   const [hcps] = useState<HCP[]>(mockHCPs);
+  
+  // Use actual data if provided, otherwise fall back to mock data
+  const displayData = data || hcps;
+  const isRealData = !!data;
 
   return (
     <>
@@ -219,7 +224,7 @@ export default function HCPTableView({ clusterName, onBack }: HCPTableViewProps)
               </button>
             )}
             <span className="text-lg font-semibold text-gray-900">
-              {clusterName ? `${clusterName} - ` : ''}{hcps.length.toLocaleString()} HCPs
+              {clusterName ? `${clusterName} - ` : ''}{displayData.length.toLocaleString()} {isRealData ? 'Records' : 'HCPs'}
             </span>
           </div>
         </div>
@@ -228,60 +233,92 @@ export default function HCPTableView({ clusterName, onBack }: HCPTableViewProps)
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Specialty
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Location
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Last Prescription
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Patient Volume
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tier
-                </th>
+                {isRealData && displayData.length > 0 ? (
+                  // Dynamic headers for real CSV data
+                  Object.keys(displayData[0]).map((header, idx) => (
+                    <th
+                      key={idx}
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      {header}
+                    </th>
+                  ))
+                ) : (
+                  // Fixed headers for mock data
+                  <>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Specialty
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Location
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Last Prescription
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Patient Volume
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Tier
+                    </th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {hcps.map((hcp) => (
-                <tr
-                  key={hcp.id}
-                  className="hover:bg-gray-50"
-                >
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                    {hcp.name}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    {hcp.specialty}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    {hcp.location}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    {hcp.lastPrescription}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    {hcp.patientVolume.toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 text-sm">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      hcp.tier === 'Tier 1' 
-                        ? 'bg-green-100 text-green-800' 
-                        : hcp.tier === 'Tier 2'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {hcp.tier}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {isRealData ? (
+                // Render real CSV data
+                displayData.map((row, rowIdx) => (
+                  <tr key={rowIdx} className="hover:bg-gray-50">
+                    {Object.keys(row).map((header, colIdx) => (
+                      <td
+                        key={colIdx}
+                        className="px-6 py-4 text-sm text-gray-900"
+                      >
+                        {row[header]}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : (
+                // Render mock HCP data
+                hcps.map((hcp) => (
+                  <tr
+                    key={hcp.id}
+                    className="hover:bg-gray-50"
+                  >
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      {hcp.name}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {hcp.specialty}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {hcp.location}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {hcp.lastPrescription}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {hcp.patientVolume.toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        hcp.tier === 'Tier 1' 
+                          ? 'bg-green-100 text-green-800' 
+                          : hcp.tier === 'Tier 2'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {hcp.tier}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

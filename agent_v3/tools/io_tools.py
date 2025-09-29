@@ -115,92 +115,12 @@ class Complete(Tool):
                 print(msg)
 
         # Display summary
-        output("\n" + "="*80)
-        output("📊 RESULTS SUMMARY")
-        output("="*80)
         output(f"\n{summary}\n")
 
-        # Display datasets if any
-        if dataset_names:
-            output("📁 DATASETS CREATED:")
-            output("-"*40)
-
-            for name in dataset_names:
-                df = context.get_dataframe(name)
-                if df is not None and not df.is_empty():
-                    output(f"\n✅ {name}")
-                    output(f"   Shape: {df.shape[0]:,} rows × {df.shape[1]} columns")
-
-                    # Show column list
-                    cols_msg = f"   Columns: {', '.join(df.columns[:5])}"
-                    if len(df.columns) > 5:
-                        cols_msg += f", ... ({len(df.columns)-5} more)"
-                    output(cols_msg)
-
-                    # Show CSV path if saved
-                    csv_path = context.csv_paths.get(name)
-                    if csv_path:
-                        output(f"   💾 Saved to: {csv_path}")
-
-                    # Show preview
-                    output(f"\n   Preview:")
-                    output("   " + "-"*36)
-
-                    # Format dataframe display with indentation
-                    df_display = str(df)
-                    for line in df_display.split('\n'):
-                        output(f"   {line}")
-
-                    # Show SQL query (collapsible in real UI)
-                    sql = context.queries.get(name)
-                    if sql:
-                        output(f"\n   SQL Query:")
-                        output("   " + "-"*36)
-                        # Show first 3 lines of SQL
-                        sql_lines = sql.split('\n')
-                        for i, line in enumerate(sql_lines[:3]):
-                            output(f"   {line}")
-                        if len(sql_lines) > 3:
-                            output(f"   ... ({len(sql_lines)-3} more lines)")
-
-            output("\n" + "="*80)
-
-        # Get user feedback
-        output("\n🤔 What would you like to do next?")
-        output("   - Type your next request to continue analyzing")
-        output("   - Type 'END' to finish the session")
-        output("   - Press Enter to continue with current results")
-
-        try:
-            if io_handler:
-                user_feedback = io_handler.get_user_input("\n👤 You: ").strip()
-            else:
-                user_feedback = input("\n👤 You: ").strip()
-
-            # Parse action
-            action = "end" if user_feedback.upper() == "END" else "continue"
-
-            # If user just pressed Enter, provide a default continue message
-            if not user_feedback and action == "continue":
-                user_feedback = "Continue with the current analysis"
-
-            return ToolResult(
-                success=True,
-                data={
-                    "feedback": user_feedback,
-                    "action": action,
-                    "hallucination_evaluation": hallucination_eval,
-                    "answer_evaluation": answer_eval
-                }
-            )
-
-        except (KeyboardInterrupt, EOFError):
-            return ToolResult(
-                success=True,
-                data={
-                    "feedback": "Session interrupted by user",
-                    "action": "end",
-                    "hallucination_evaluation": hallucination_eval,
-                    "answer_evaluation": answer_eval
-                }
-            )
+        return ToolResult(
+            success=True,
+            data={
+                "feedback": "Analysis complete",
+                "action": "end"
+            }
+        )
