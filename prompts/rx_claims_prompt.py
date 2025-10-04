@@ -117,6 +117,41 @@ DATE HANDLING:
 - Year extraction: EXTRACT(YEAR FROM DATE_PRESCRIPTION_WRITTEN_DD)
 - Month names: FORMAT_DATE('%B', DATE_PRESCRIPTION_WRITTEN_DD)
 
+CRITICAL DATE CALCULATION RULES:
+⚠️ COMMON ERROR TO AVOID:
+- ❌ WRONG: EXTRACT(MONTH FROM DATE_DIFF(date1, date2, MONTH))
+  Reason: DATE_DIFF returns INT64, but EXTRACT requires DATE/TIMESTAMP/DATETIME
+
+✅ CORRECT PATTERNS FOR MONTH CALCULATIONS:
+- For month number from a date: EXTRACT(MONTH FROM DATE_PRESCRIPTION_WRITTEN_DD)
+- For months elapsed as integer: DATE_DIFF(CURRENT_DATE(), DATE_PRESCRIPTION_WRITTEN_DD, MONTH)
+- For relative month index: Use DATE_DIFF directly without EXTRACT wrapper
+- For grouping by calendar month: EXTRACT(YEAR/MONTH FROM date_column) directly on DATE column
+
+EXAMPLES OF CORRECT MONTH-BASED ANALYSIS:
+-- Get prescription month number (1-12):
+SELECT EXTRACT(MONTH FROM DATE_PRESCRIPTION_WRITTEN_DD) as month_number
+
+-- Calculate months elapsed since first prescription (INT64 result):
+SELECT
+  PRESCRIBER_NPI_NBR,
+  DATE_DIFF(CURRENT_DATE(), MIN(DATE_PRESCRIPTION_WRITTEN_DD), MONTH) as months_since_first
+GROUP BY PRESCRIBER_NPI_NBR
+
+-- Relative month index from first prescription (INT64 result):
+SELECT
+  PRESCRIBER_NPI_NBR,
+  DATE_DIFF(DATE_PRESCRIPTION_WRITTEN_DD,
+    MIN(DATE_PRESCRIPTION_WRITTEN_DD) OVER (PARTITION BY PRESCRIBER_NPI_NBR),
+    MONTH) as month_index
+
+-- Group by calendar year-month:
+SELECT
+  EXTRACT(YEAR FROM DATE_PRESCRIPTION_WRITTEN_DD) as year,
+  EXTRACT(MONTH FROM DATE_PRESCRIPTION_WRITTEN_DD) as month,
+  COUNT(*) as prescription_count
+GROUP BY year, month
+
 AGGREGATION EXAMPLES:
 - Count prescriptions: COUNT(*) as prescription_count
 - Unique prescribers: COUNT(DISTINCT PRESCRIBER_NPI_NBR) as unique_prescribers

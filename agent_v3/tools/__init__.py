@@ -6,6 +6,7 @@ from .sql_execution import BigQuerySQLQuery
 from .io_tools import Communicate, Complete
 from .web_search import WebSearchTool, ClinicalContextSearchTool
 from .feature_engineering import FeatureEngineeringTool, TrajectoryClassificationTool
+from .pharmaceutical_features import PharmaceuticalFeatureEngineeringTool
 from .predictive_analysis import PredictiveAnalysisTool
 from .base import Tool, ToolResult
 
@@ -26,6 +27,7 @@ def get_all_tools():
         "web_search": WebSearchTool(),
         "clinical_context_search": ClinicalContextSearchTool(),
         "feature_engineering": FeatureEngineeringTool(),
+        "pharmaceutical_feature_engineering": PharmaceuticalFeatureEngineeringTool(),
         "trajectory_classification": TrajectoryClassificationTool(),
         "predictive_analysis": PredictiveAnalysisTool()
     }
@@ -50,6 +52,7 @@ def get_predictive_tools():
         "web_search": WebSearchTool(),
         "clinical_context_search": ClinicalContextSearchTool(),
         "feature_engineering": FeatureEngineeringTool(),
+        "pharmaceutical_feature_engineering": PharmaceuticalFeatureEngineeringTool(),
         "trajectory_classification": TrajectoryClassificationTool(),
         "predictive_analysis": PredictiveAnalysisTool()
     }
@@ -69,6 +72,7 @@ __all__ = [
     "WebSearchTool",
     "ClinicalContextSearchTool",
     "FeatureEngineeringTool",
+    "PharmaceuticalFeatureEngineeringTool",
     "TrajectoryClassificationTool",
     "PredictiveAnalysisTool",
 

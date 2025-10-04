@@ -2,12 +2,14 @@
 Recursive orchestrator for agent_v3
 """
 import time
+import asyncio
 from typing import Dict, Any, Optional
 from .context import Context
 from .llm_client import LLMClient
 from .tools import get_all_tools
 from .prompts.system_prompt import get_main_system_prompt
 from .exceptions import ConnectionLostError, ToolExecutionError, MaxRecursionError
+from .agents.holistic_critic_agent import HolisticCriticAgent
 
 
 
@@ -22,6 +24,8 @@ class RecursiveOrchestrator:
         self.tools = get_all_tools()
         self.tool_names = list(self.tools.keys())
         self.io_handler = io_handler
+        self.critic_agent = HolisticCriticAgent()  # Initialize holistic critic
+        self.revision_attempted = False  # Track if revision has been attempted
 
     def log(self, message: str):
         """Debug logging"""
@@ -52,6 +56,20 @@ class RecursiveOrchestrator:
             # Start recursive loop
             result = self._recursive_loop()
 
+            # CRITICAL: Run holistic critic evaluation BEFORE returning to user
+            self.log("Running holistic critic evaluation before returning to user...")
+            critique = self._run_holistic_critic_evaluation()
+
+            # Check if revision is required
+            if critique and critique.get("requires_revision") and critique.get("revision_priority") in ["critical", "high"]:
+                self.log(f"Critic requires revision: {critique.get('revision_priority')}")
+
+                # Add critique feedback to context for revision
+                revision_result = self._handle_revision_feedback(critique)
+
+                # Update result with revision outcome
+                result = revision_result if revision_result.get("completed") else result
+
             # Get final summary
             summary = self.context.get_summary()
 
@@ -59,7 +77,8 @@ class RecursiveOrchestrator:
                 "success": result.get("completed", False),
                 "summary": summary,
                 "datasets": self.context.get_all_datasets(),
-                "error": result.get("error")
+                "error": result.get("error"),
+                "critique": critique  # Include critique in response
             }
         except (ConnectionLostError, MaxRecursionError) as e:
             # These are terminal errors - return immediately
@@ -251,11 +270,21 @@ class RecursiveOrchestrator:
         predictive_keywords = [
             "predict", "prediction", "predictive", "forecast", "high prescriber",
             "month 12", "early signals", "characteristics", "who will be",
-            "identify prescribers", "trajectory", "patterns", "features"
+            "identify", "trajectory", "patterns", "features"
         ]
 
         input_lower = user_input.lower()
-        return any(keyword in input_lower for keyword in predictive_keywords)
+
+        # Check for predictive keywords combined with prescribing/signals context
+        has_predictive_keyword = any(keyword in input_lower for keyword in predictive_keywords)
+        has_prescribing_context = any(word in input_lower for word in ["prescrib", "signal", "month"])
+
+        # If it has both predictive keywords and prescribing context, it's likely predictive
+        if has_predictive_keyword and has_prescribing_context:
+            return True
+
+        # Also check for direct predictive phrases
+        return any(keyword in input_lower for keyword in ["predict", "prediction", "predictive", "forecast"])
 
     def _should_use_multi_agent(self, user_input: str) -> bool:
         """Determine if multi-agent workflow should be used"""
@@ -321,3 +350,89 @@ class RecursiveOrchestrator:
             error = f"Multi-agent workflow execution failed: {str(e)}"
             self.log(f"ERROR: {error}")
             return {"completed": False, "error": error}
+
+    def _run_holistic_critic_evaluation(self) -> Optional[Dict[str, Any]]:
+        """
+        Run holistic critic evaluation on entire workflow.
+        Returns critique or None if evaluation fails.
+        """
+        try:
+            # Get full execution log
+            execution_log = self.context.get_full_execution_log()
+
+            self.log(f"Critic evaluating {len(execution_log.get('tool_executions', []))} tool executions")
+
+            # Run async evaluation
+            critique = asyncio.run(
+                self.critic_agent.evaluate_workflow(execution_log)
+            )
+
+            self.log(f"Critic evaluation complete: overall_quality={critique.get('overall_quality_score', 'N/A')}, "
+                    f"requires_revision={critique.get('requires_revision', False)}")
+
+            return critique
+
+        except Exception as e:
+            self.log(f"Critic evaluation failed: {str(e)}")
+            # Don't fail the entire workflow if critique fails
+            return None
+
+    def _handle_revision_feedback(self, critique: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle revision feedback from critic.
+        Adds critique to context and triggers one revision attempt.
+
+        Args:
+            critique: Critique from HolisticCriticAgent
+
+        Returns:
+            Revision result
+        """
+        # Only allow one revision attempt to avoid infinite loops
+        if self.revision_attempted:
+            self.log("Revision already attempted once, skipping further revisions")
+            return {"completed": False, "error": "Max revisions reached"}
+
+        self.revision_attempted = True
+
+        # Extract specific improvement suggestions
+        critical_issues = critique.get("critical_issues", [])
+        improvement_suggestions = critique.get("improvement_suggestions", [])
+        missing_elements = critique.get("missing_elements", [])
+
+        # Build revision prompt
+        revision_prompt = "QUALITY ASSURANCE FEEDBACK - REVISION REQUIRED:\n\n"
+        revision_prompt += f"Overall Quality Score: {critique.get('overall_quality_score', 'N/A')}\n"
+        revision_prompt += f"Revision Priority: {critique.get('revision_priority', 'unknown')}\n\n"
+
+        if critical_issues:
+            revision_prompt += "CRITICAL ISSUES TO ADDRESS:\n"
+            for issue in critical_issues[:3]:  # Limit to top 3
+                revision_prompt += f"- {issue}\n"
+            revision_prompt += "\n"
+
+        if improvement_suggestions:
+            revision_prompt += "IMPROVEMENT SUGGESTIONS:\n"
+            for suggestion in improvement_suggestions[:5]:  # Limit to top 5
+                revision_prompt += f"- {suggestion}\n"
+            revision_prompt += "\n"
+
+        if missing_elements:
+            revision_prompt += "MISSING ELEMENTS:\n"
+            for element in missing_elements[:3]:
+                revision_prompt += f"- {element}\n"
+            revision_prompt += "\n"
+
+        revision_prompt += "Please revise your approach to address these issues and improve the analysis quality."
+
+        # Add revision prompt as system hint
+        self.context.add_system_hint(revision_prompt)
+        self.log("Added revision feedback to context, continuing with improved strategy")
+
+        # Continue recursion with feedback
+        try:
+            revision_result = self._recursive_loop(depth=0)
+            return revision_result
+        except Exception as e:
+            self.log(f"Revision attempt failed: {str(e)}")
+            return {"completed": False, "error": f"Revision failed: {str(e)}"}

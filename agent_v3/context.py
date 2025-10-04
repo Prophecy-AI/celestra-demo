@@ -218,3 +218,66 @@ class Context:
             "errors": [t for t in self.tool_history if t.error],
             "duration": time.time() - self.created_at.timestamp()
         }
+
+    def get_full_execution_log(self) -> Dict[str, Any]:
+        """
+        Get comprehensive execution log for holistic evaluation.
+        Includes all conversation history, tool executions, errors, and metadata.
+        """
+        return {
+            "session_id": self.session_id,
+            "original_query": self.original_user_query,
+            "duration_seconds": time.time() - self.created_at.timestamp(),
+            "recursion_depth": self.recursion_depth,
+            "max_depth": self.max_depth,
+
+            # Full conversation history
+            "conversation_history": [
+                {
+                    "role": msg["role"],
+                    "content": msg["content"],
+                    "timestamp": msg.get("timestamp", 0)
+                }
+                for msg in self.conversation_history
+            ],
+
+            # Detailed tool execution log
+            "tool_executions": [
+                {
+                    "tool_name": exec.tool_name,
+                    "parameters": exec.parameters,
+                    "result": exec.result,
+                    "error": exec.error,
+                    "timestamp": exec.timestamp,
+                    "success": exec.error is None
+                }
+                for exec in self.tool_history
+            ],
+
+            # Error summary
+            "errors": [
+                {
+                    "tool_name": exec.tool_name,
+                    "error_message": exec.error,
+                    "parameters": exec.parameters,
+                    "timestamp": exec.timestamp
+                }
+                for exec in self.tool_history if exec.error
+            ],
+
+            # Dataset metadata
+            "datasets": self.get_datasets_metadata(),
+
+            # Execution metrics
+            "metrics": {
+                "total_tools_executed": len(self.tool_history),
+                "successful_tools": len([t for t in self.tool_history if not t.error]),
+                "failed_tools": len([t for t in self.tool_history if t.error]),
+                "datasets_created": len(self.dataframes),
+                "total_data_rows": sum(df.shape[0] for df in self.dataframes.values()),
+                "efficiency_ratio": self.recursion_depth / max(len(self.tool_history), 1)
+            },
+
+            # Multi-agent workflow metadata
+            "workflow_metadata": self.metadata.copy() if self.metadata else {}
+        }

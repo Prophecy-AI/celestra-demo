@@ -91,11 +91,11 @@ class FeatureEngineeringTool(Tool):
         if missing_columns:
             raise ValueError(f"Missing required columns: {missing_columns}")
 
-        # Convert date column to datetime
-        df['SERVICE_DATE_DD'] = pd.to_datetime(df['SERVICE_DATE_DD'])
-
-        # Create month-year column for grouping
-        df['month_year'] = df['SERVICE_DATE_DD'].dt.to_period('M')
+        # Convert date column to datetime and create month-year column
+        df = df.with_columns([
+            pl.col('SERVICE_DATE_DD').str.to_date().alias('SERVICE_DATE_DD'),
+            pl.col('SERVICE_DATE_DD').str.to_date().dt.strftime('%Y-%m').alias('month_year')
+        ])
 
         # Filter to early months (1-time_window)
         early_data = self._filter_early_months(df, time_window)

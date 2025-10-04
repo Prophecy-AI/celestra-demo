@@ -453,12 +453,22 @@ class PredictiveAnalysisTool(Tool):
     def _get_available_tools_for_agent(self, agent_type: str, context: Any) -> Dict[str, Any]:
         """Get tools available for specific agent type"""
 
-        # This would integrate with the main tool registry
-        # For now, return placeholder structure
+        # Import actual tools from registry
+        from . import get_all_tools
+        all_tools = get_all_tools()
+
+        # Return actual tool instances for each agent type
         if agent_type == "planner":
-            return {"web_search": None, "clinical_context_search": None}
+            return {
+                "web_search": all_tools.get("web_search"),
+                "clinical_context_search": all_tools.get("clinical_context_search")
+            }
         elif agent_type == "retriever":
-            return {"web_search": None, "clinical_context_search": None, "bigquery_sql_query": None}
+            return {
+                "web_search": all_tools.get("web_search"),
+                "clinical_context_search": all_tools.get("clinical_context_search"),
+                "bigquery_sql_query": all_tools.get("bigquery_sql_query")
+            }
         else:
             return {}
 
@@ -468,7 +478,7 @@ class PredictiveAnalysisTool(Tool):
         return {
             "previous_queries": [],  # Would track previous queries
             "existing_datasets": list(context.get_all_datasets().keys()),
-            "session_history": len(context.messages) if hasattr(context, 'messages') else 0
+            "session_history": len(context.conversation_history) if hasattr(context, 'conversation_history') else 0
         }
 
     def _extract_drug_name(self, query: str) -> str:
