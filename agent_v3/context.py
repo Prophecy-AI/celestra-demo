@@ -37,6 +37,7 @@ class Context:
         self.max_depth = 30
         self.created_at = datetime.now()
         self.original_user_query: Optional[str] = None  # Store original query for evaluations
+        self.metadata: Dict[str, Any] = {}  # Store arbitrary metadata for multi-agent workflows
 
     def add_user_message(self, content: str) -> None:
         """Add user message to conversation history"""
@@ -106,7 +107,11 @@ class Context:
         """Retrieve stored DataFrame"""
         return self.dataframes.get(name)
 
-    def get_all_datasets(self) -> List[Dict[str, Any]]:
+    def get_all_datasets(self) -> Dict[str, pl.DataFrame]:
+        """Get all stored datasets"""
+        return self.dataframes.copy()
+
+    def get_datasets_metadata(self) -> List[Dict[str, Any]]:
         """Get metadata for all stored datasets"""
         datasets = []
         for name, df in self.dataframes.items():
@@ -118,6 +123,26 @@ class Context:
                 "csv_path": self.csv_paths.get(name, "")
             })
         return datasets
+
+    def add_dataset(self, name: str, df: pl.DataFrame, sql: str = "", csv_path: str = "") -> None:
+        """Add a dataset to context"""
+        self.dataframes[name] = df
+        if sql:
+            self.queries[name] = sql
+        if csv_path:
+            self.csv_paths[name] = csv_path
+
+    def add_metadata(self, key: str, value: Any) -> None:
+        """Add metadata for multi-agent workflows"""
+        self.metadata[key] = value
+
+    def get_metadata(self, key: str, default: Any = None) -> Any:
+        """Get metadata value"""
+        return self.metadata.get(key, default)
+
+    def has_metadata(self, key: str) -> bool:
+        """Check if metadata key exists"""
+        return key in self.metadata
 
     def get_last_tool_name(self) -> Optional[str]:
         """Get the name of the last executed tool"""

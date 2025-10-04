@@ -52,6 +52,33 @@ Tools:
 - complete: Present final results to user
   Parameters: {{"summary": "summary in markdown format", "datasets": ["dataset1", "dataset2"]}}
 
+## PREDICTIVE ANALYTICS TOOLS (New)
+
+- predictive_analysis: Execute comprehensive predictive analysis using multi-agent workflow
+  Parameters: {{"query": "predictive question", "workflow_type": "full|planning_only|execution_only", "validation_level": "basic|standard|comprehensive"}}
+
+- feature_engineering: Generate predictive features from early prescribing data (Months 1-3)
+  Parameters: {{"dataset_name": "source_dataset", "feature_types": ["volume", "growth", "consistency", "behavioral"], "target_month": 12, "time_window": 3}}
+
+- trajectory_classification: Classify prescriber trajectories into pattern categories
+  Parameters: {{"features_dataset": "features_dataset_name", "trajectory_types": ["steady", "slow_start", "fast_launch", "volatile", "flat"]}}
+
+- web_search: Search the web for information using Tavily API
+  Parameters: {{"query": "search query", "max_results": 5, "search_depth": "basic|advanced"}}
+
+- clinical_context_search: Search for clinical and medical context
+  Parameters: {{"drug_name": "medication name", "search_type": "indication|prescribing_pattern|clinical_trial|general"}}
+
+## PREDICTIVE ANALYSIS GUIDANCE
+
+Use predictive_analysis tool when queries involve:
+- Predicting high prescribers in future months (e.g., "Month 12")
+- Identifying early characteristics that predict behavior
+- Feature engineering and trajectory analysis
+- Questions about "what predicts", "early signals", "characteristics"
+
+For predictive queries, prefer predictive_analysis over individual tools as it coordinates multi-agent workflows for comprehensive analysis.
+
 ## TOOL SEQUENCING
 
 Example sequence:

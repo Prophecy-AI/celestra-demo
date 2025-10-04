@@ -88,6 +88,19 @@ class RecursiveOrchestrator:
 
         self.log(f"Recursion depth: {depth}")
 
+        # Check if this is the first iteration and if we should use multi-agent workflow
+        if depth == 0 and hasattr(self.context, 'original_user_query'):
+            user_query = self.context.original_user_query
+            if user_query and self._should_use_multi_agent(user_query):
+                self.log("Detected multi-agent workflow requirement")
+                multi_agent_result = self._execute_multi_agent_workflow(user_query)
+
+                if multi_agent_result.get("completed"):
+                    return multi_agent_result
+                else:
+                    # Multi-agent workflow failed, continue with regular flow
+                    self.log("Multi-agent workflow failed, continuing with regular flow")
+
         # Get messages for LLM
         messages = self.context.get_conversation_for_llm()
 
@@ -232,3 +245,79 @@ class RecursiveOrchestrator:
                 "to inform the user or try an alternative approach."
             )
             self.log("Added hint: Handle error condition")
+
+    def _is_predictive_analysis_query(self, user_input: str) -> bool:
+        """Detect if query requires predictive analysis workflow"""
+        predictive_keywords = [
+            "predict", "prediction", "predictive", "forecast", "high prescriber",
+            "month 12", "early signals", "characteristics", "who will be",
+            "identify prescribers", "trajectory", "patterns", "features"
+        ]
+
+        input_lower = user_input.lower()
+        return any(keyword in input_lower for keyword in predictive_keywords)
+
+    def _should_use_multi_agent(self, user_input: str) -> bool:
+        """Determine if multi-agent workflow should be used"""
+        # Use multi-agent for predictive analysis or complex analytical queries
+        return (
+            self._is_predictive_analysis_query(user_input) or
+            any(keyword in user_input.lower() for keyword in [
+                "comprehensive analysis", "detailed analysis", "multi-step",
+                "feature engineering", "reason card", "evidence-based"
+            ])
+        )
+
+    def _execute_multi_agent_workflow(self, user_input: str) -> Dict[str, Any]:
+        """Execute multi-agent workflow for complex queries"""
+
+        self.log("Executing multi-agent workflow")
+
+        # Check if predictive_analysis tool is available
+        if "predictive_analysis" not in self.tools:
+            self.log("Predictive analysis tool not available, falling back to regular flow")
+            return {"completed": False, "error": "Multi-agent workflow not available"}
+
+        try:
+            # Use predictive analysis tool to coordinate workflow
+            tool = self.tools["predictive_analysis"]
+
+            # Determine workflow type based on query
+            workflow_type = "full"
+            if "plan only" in user_input.lower() or "planning" in user_input.lower():
+                workflow_type = "planning_only"
+
+            parameters = {
+                "query": user_input,
+                "workflow_type": workflow_type,
+                "validation_level": "standard"
+            }
+
+            self.log(f"Executing multi-agent workflow with parameters: {parameters}")
+
+            # Execute the multi-agent workflow
+            result = tool.safe_execute(parameters, self.context)
+
+            # Add to context
+            self.context.add_tool_execution("predictive_analysis", parameters, result)
+
+            if "error" in result:
+                self.log(f"Multi-agent workflow error: {result['error']}")
+                return {"completed": False, "error": result["error"]}
+            else:
+                self.log("Multi-agent workflow completed successfully")
+
+                # Check if we should present results or continue
+                if result.get("final_output"):
+                    # Multi-agent workflow produced final output, suggest completion
+                    self.context.add_system_hint(
+                        "Multi-agent predictive analysis completed successfully. "
+                        "Consider using 'complete' to present the comprehensive results."
+                    )
+
+                return {"completed": True, "multi_agent_result": result}
+
+        except Exception as e:
+            error = f"Multi-agent workflow execution failed: {str(e)}"
+            self.log(f"ERROR: {error}")
+            return {"completed": False, "error": error}
