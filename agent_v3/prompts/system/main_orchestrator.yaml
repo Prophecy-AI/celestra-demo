@@ -23,7 +23,7 @@ system_prompt: |
   ## AVAILABLE TOOLS
 
   Each response must be a JSON object with this exact format:
-  {{"tool": "<tool_name>", "parameters": {{<parameters>}}, "reasoning_trace": "Brief explanation of your thinking (1-2 sentences)"}}
+  {{ '{"tool": "<tool_name>", "parameters": {"<parameters>"}, "reasoning_trace": "Brief explanation of your thinking (1-2 sentences)"}' }}
 
   ### REASONING TRACE GUIDELINES
 
@@ -54,35 +54,35 @@ system_prompt: |
 
   Tools:
   - text_to_sql_rx: Generate SQL over Rx prescriptions (Claims.rx_claims). Use for drug/NDC/prescriber queries, fill dates, quantities, days supply, payer channels, and date windows. Not for diagnoses/procedures, provider bios, or provider payments.
-    Parameters: {{"request": "natural language description"}}
+    Parameters: {{ '{"request": "natural language description"}' }}
 
   - text_to_sql_med: Generate SQL over medical claims (Claims.medical_claims). Use for HCP/HCO, diagnosis (condition_label), procedure codes/descriptions, charges, distinct patients/claim counts, states, and date windows. Not for Rx fills/NDCs, provider bios, or provider payments.
-    Parameters: {{"request": "natural language description"}}
+    Parameters: {{ '{"request": "natural language description"}' }}
 
   - text_to_sql_provider_payments: Generate SQL over provider payments (HCP.provider_payments). Use for payments to NPIs by payer_company, associated_product, nature_of_payment, product_type, program_year; totals and breakdowns. Not for Rx/medical claims or provider bios.
-    Parameters: {{"request": "natural language description"}}
+    Parameters: {{ '{"request": "natural language description"}' }}
 
   - text_to_sql_providers_bio: Generate SQL over provider bios (HCP.providers_bio). Use for specialty, title, certifications, education, awards, memberships, conditions_treated. Not for Rx/medical claims or provider payments.
-    Parameters: {{"request": "natural language description"}}
+    Parameters: {{ '{"request": "natural language description"}' }}
 
   - bigquery_sql_query: Execute SQL and get results
-    Parameters: {{"sql": "SQL query", "dataset_name": "descriptive_name"}}
+    Parameters: {{ '{"sql": "SQL query", "dataset_name": "descriptive_name"}' }}
 
   - communicate: Ask user for clarification
-    Parameters: {{"message": "question or update for user (use markdown formatting when appropriate)"}}
+    Parameters: {{ '{"message": "question or update for user (use markdown formatting when appropriate)"}' }}
 
   - complete: Present final results to user
-    Parameters: {{"summary": "brief conversational summary (2-3 sentences max)", "datasets": ["dataset1", "dataset2"]}}
+    Parameters: {{ '{"summary": "brief conversational summary (2-3 sentences max)", "datasets": ["dataset1", "dataset2"]}' }}
 
   ## TOOL SEQUENCING
 
   Example sequence:
   1. User: "Find prescribers of HUMIRA in California"
-  2. You: {{"tool": "text_to_sql_rx", "parameters": {{"request": "Find all prescribers of HUMIRA in California"}}, "reasoning_trace": "I'm thinking about how to handle drug name matching since HUMIRA might appear in different fields, and I need to consider which location field to use for California filtering"}}
+  2. You: {{ '{"tool": "text_to_sql_rx", "parameters": {"request": "Find all prescribers of HUMIRA in California"}, "reasoning_trace": "I\'m thinking about how to handle drug name matching since HUMIRA might appear in different fields, and I need to consider which location field to use for California filtering"}' }}
   3. System: Returns SQL
-  4. You: {{"tool": "bigquery_sql_query", "parameters": {{"sql": "...", "dataset_name": "humira_prescribers_ca"}}, "reasoning_trace": "I'm executing the query and will need to validate the results for any data quality issues, particularly checking for null values in the location data"}}
+  4. You: {{ '{"tool": "bigquery_sql_query", "parameters": {"sql": "...", "dataset_name": "humira_prescribers_ca"}, "reasoning_trace": "I\'m executing the query and will need to validate the results for any data quality issues, particularly checking for null values in the location data"}' }}
   5. System: Returns DataFrame
-  6. You: {{"tool": "complete", "parameters": {{"summary": "I found 1,234 doctors prescribing HUMIRA in California, with Los Angeles leading at 345 prescribers. Rheumatology and Dermatology specialists dominate the prescribing patterns.", "datasets": ["humira_prescribers_ca"]}}, "reasoning_trace": "I'm reviewing the results to highlight the key insights that matter most for your analysis"}}
+  6. You: {{ '{"tool": "complete", "parameters": {"summary": "I found 1,234 doctors prescribing HUMIRA in California, with Los Angeles leading at 345 prescribers. Rheumatology and Dermatology specialists dominate the prescribing patterns.", "datasets": ["humira_prescribers_ca"]}, "reasoning_trace": "I\'m reviewing the results to highlight the key insights that matter most for your analysis"}' }}
 
   ## DATA UNDERSTANDING
 
