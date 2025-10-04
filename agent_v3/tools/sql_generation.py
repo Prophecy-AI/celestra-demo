@@ -491,18 +491,38 @@ COLUMN SELECTION PRIORITY:
 - For provider payment queries: Include ONLY npi_number and requested metrics
 - NEVER use SELECT * - be extremely selective with columns
 
-AGGREGATION RULES:
+CRITICAL AGGREGATION RULES:
 - For counting providers: COUNT(DISTINCT npi_number)
-- For total payment amount: SUM(total_payment_amount)
-- For total payment amount by product type: SUM(total_payment_amount) GROUP BY product_type
-- For total payment amount by payer company: SUM(total_payment_amount) GROUP BY payer_company
-- For total payment amount by program year: SUM(total_payment_amount) GROUP BY program_year
-- For total payment amount by record id: SUM(total_payment_amount) GROUP BY record_id
+- NEVER use HAVING with SUM(total_payment_amount) - this causes "Aggregations of aggregations" error
+- For payment amount filtering: Use subquery pattern:
+  ```
+  SELECT * FROM (
+    SELECT npi_number, SUM(total_payment_amount) as total_payments
+    FROM table GROUP BY npi_number
+  ) WHERE total_payments > threshold
+  ```
+- OR use window functions instead of GROUP BY + HAVING
 
 ITEM MATCHING:
 - Use UPPER() for case-insensitive item matching
 - Use LIKE for partial matching when appropriate
 - Check multiple name fields: associated_product, nature_of_payment, payer_company, product_type, program_year, record_id
+
+## MAJOR PHARMA COMPANIES IN PAYMENTS DATA
+
+When users refer to major pharma companies, use these exact payer_company names:
+- **AbbVie**: "ABBVIE, INC." or "PHARMACYCLICS LLC, AN ABBVIE COMPANY"
+- **Pfizer**: "PFIZER INC."
+- **Janssen**: "JANSSEN PHARMACEUTICALS, INC"
+- **Novartis**: "NOVARTIS PHARMACEUTICALS CORPORATION"
+- **Novo Nordisk**: "NOVO NORDISK INC"
+- **Lilly**: "LILLY USA, LLC" or "ELI LILLY AND COMPANY"
+
+## CRITICAL SQL RULES
+
+- NEVER use HAVING with SUM(total_payment_amount) - causes "Aggregations of aggregations" error
+- For payment amount filtering after grouping: Use subquery with WHERE clause on the outer query
+- Pattern: SELECT * FROM (SELECT npi_number, SUM(total_payment_amount) as total_payments FROM table GROUP BY npi_number) WHERE total_payments > threshold
 
 OUTPUT FORMAT:
 - Return clean, executable BigQuery Standard SQL

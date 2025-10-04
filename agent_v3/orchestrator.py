@@ -162,8 +162,41 @@ class RecursiveOrchestrator:
         # Execute the selected tool
         tool_name = tool_call["tool"]
         tool_params = tool_call.get("parameters", {})
+        reasoning_trace = tool_call.get("reasoning_trace", "")
+
+        # Stream the reasoning trace if available
+        if reasoning_trace and self.io_handler:
+            # Check if this is a WebSocket handler with reasoning trace support
+            if hasattr(self.io_handler, 'send_reasoning_trace'):
+                # Send reasoning trace as separate message type
+                self.io_handler.send_reasoning_trace(reasoning_trace)
+                self.log(f"Sent reasoning trace via WebSocket: {reasoning_trace[:50]}...")
+            else:
+                # Should not happen in WebSocket mode, but log it
+                self.log(f"WARNING: No send_reasoning_trace method found on handler type: {type(self.io_handler)}")
+        else:
+            if not reasoning_trace:
+                self.log(f"No reasoning trace found. Available keys: {list(tool_call.keys()) if tool_call else 'No tool_call'}")
+            if not self.io_handler:
+                self.log(f"No IO handler available")
 
         self.log(f"Executing tool: {tool_name} with params: {tool_params}")
+
+        # Send action status based on tool type
+        if self.io_handler and hasattr(self.io_handler, 'send_action_status'):
+            if tool_name.startswith('text_to_sql'):
+                action_map = {
+                    'text_to_sql_rx': 'Generating SQL for prescription data',
+                    'text_to_sql_med': 'Generating SQL for medical claims',
+                    'text_to_sql_provider_payments': 'Generating SQL for provider payments',
+                    'text_to_sql_providers_bio': 'Generating SQL for provider information'
+                }
+                self.io_handler.send_action_status("generating", action_map.get(tool_name, "Generating SQL query"))
+            elif tool_name == 'bigquery_sql_query':
+                dataset_name = tool_params.get('dataset_name', 'data')
+                self.io_handler.send_action_status("querying", f"Querying database for: {dataset_name}")
+            elif tool_name == 'complete':
+                self.io_handler.send_action_status("completing", "Preparing final results")
 
         # Get the tool
         if tool_name not in self.tools:

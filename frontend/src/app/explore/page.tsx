@@ -6,23 +6,24 @@ import Header from '@/components/Header';
 
 interface Message {
   id: string;
-  type: 'user' | 'assistant' | 'system' | 'error' | 'prompt';
+  type: 'user' | 'assistant' | 'system' | 'error' | 'prompt' | 'reasoning' | 'data_table' | 'action_status';
   content: string;
   timestamp: Date;
+  data?: any[]; // For data table messages
+  filename?: string; // For data table messages
+  action?: string; // For action status messages
+  workflowId?: number;
 }
 
 interface Cluster {
   id: string;
   name: string;
   size: number;
+  description?: string;
+  filename?: string;
+  data?: any[];
 }
 
-interface Dataset {
-  sessionId: string;
-  filename: string;
-  path: string;
-  timestamp: Date;
-}
 
 enum ServerState {
   IDLE = 'idle',
@@ -32,12 +33,8 @@ enum ServerState {
 }
 
 const availableClusters: Cluster[] = [
-  { id: '1', name: 'High-Volume Endocrinologists', size: 45 },
-  { id: '2', name: 'Tier 1 Non-Prescribers', size: 23 },
-  { id: '3', name: 'Urban Family Medicine', size: 67 },
-  { id: '4', name: 'Recent Cardiology Adopters', size: 32 },
-  { id: '5', name: 'High-Value Internal Medicine', size: 89 },
-  { id: '6', name: 'West Coast Specialists', size: 156 }
+  { id: '1', name: 'High-Volume Rheumatologists', size: 342, description: 'Rheumatologists treating 200+ autoimmune patients with recent JAK inhibitor prescriptions' },
+  { id: '2', name: 'Academic Immunology Centers', size: 87, description: 'Immunologists at major academic medical centers specializing in complex autoimmune disorders' }
 ];
 
 export default function ExplorePage() {
@@ -50,15 +47,41 @@ export default function ExplorePage() {
   const [connected, setConnected] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentStreamingMessage, setCurrentStreamingMessage] = useState<string>('');
-  const [datasets, setDatasets] = useState<Dataset[]>([]);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamingMessageRef = useRef<string>('');
+  const lastNonOutputTextRef = useRef<string>('');
+  const recentNonOutputTextsRef = useRef<string[]>([]);
+  const workflowIdRef = useRef<number>(0);
+  const [thinkingOpen, setThinkingOpen] = useState<boolean>(true);
+  const [thinkingActive, setThinkingActive] = useState<boolean>(false);
+  const lastReasoningRef = useRef<string>('');
+  const lastActionRef = useRef<string>('');
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const messageRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [currentActiveActionId, setCurrentActiveActionId] = useState<string | null>(null);
+  const [hasEverSentQuery, setHasEverSentQuery] = useState<boolean>(false);
+  const [isSessionComplete, setIsSessionComplete] = useState<boolean>(true);
+  const [savedClusters, setSavedClusters] = useState<Cluster[]>([]);
+  const [showClusterPopup, setShowClusterPopup] = useState<boolean>(false);
+  const [clusterToSave, setClusterToSave] = useState<{data: any[], filename: string} | null>(null);
+  const [clusterName, setClusterName] = useState<string>('');
+  const [clusterDescription, setClusterDescription] = useState<string>('');
+
+  // Load saved clusters from sessionStorage on mount
+  useEffect(() => {
+    const saved = sessionStorage.getItem('savedClusters');
+    if (saved) {
+      try {
+        setSavedClusters(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to load saved clusters:', e);
+      }
+    }
+  }, []);
 
   // Auto-scroll to bottom when new messages arrive or streaming updates
   const scrollToBottom = useCallback((smooth = true) => {
@@ -126,8 +149,8 @@ export default function ExplorePage() {
 
   // Update visible messages when messages change
   useEffect(() => {
-    // Start with showing recent messages (last 10)
-    const recentMessages = messages.slice(-10);
+    // Start with showing recent messages (last 20) to ensure user messages are always visible
+    const recentMessages = messages.slice(-20);
     setVisibleMessages(recentMessages);
 
     // Observe all message placeholders
@@ -162,16 +185,13 @@ export default function ExplorePage() {
       handleWebSocketMessage(data);
     };
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+    ws.onerror = () => {
       setConnected(false);
-      addMessage('system', '❌ Connection error. Please refresh the page.');
     };
 
     ws.onclose = () => {
       console.log('WebSocket closed');
       setConnected(false);
-      addMessage('system', '🔌 Disconnected from server');
     };
 
     return () => {
@@ -188,16 +208,8 @@ export default function ExplorePage() {
         if (data.state === 'connected') {
           setConnected(true);
           setSessionId(data.session_id);
-          addMessage('system', '✅ Connected to Healthcare Data Agent');
         } else if (data.state === 'complete') {
-          // Finalize any pending streaming message when complete
-          console.log('✅ Complete status - current streaming msg:', streamingMessageRef.current);
-          if (streamingMessageRef.current) {
-            addMessage('assistant', streamingMessageRef.current);
-            streamingMessageRef.current = '';
-            setCurrentStreamingMessage('');
-          }
-          addMessage('system', '✅ Analysis complete');
+          console.log('✅ Complete status received');
         }
         break;
 
@@ -207,6 +219,16 @@ export default function ExplorePage() {
         console.log('📝 Current streaming message ref:', streamingMessageRef.current.length);
         setServerState(newState);
 
+        if (newState === ServerState.PROCESSING) {
+          workflowIdRef.current += 1;
+          setThinkingActive(true);
+          setThinkingOpen(true);
+          streamingMessageRef.current = '';
+          setCurrentStreamingMessage('');
+          console.log('🔄 Session started - hiding intermediate tables');
+          setIsSessionComplete(false);
+        }
+
         // Only finalize streaming message when moving to IDLE or WAITING_INPUT
         if (newState === ServerState.IDLE || newState === ServerState.WAITING_INPUT) {
           console.log('📌 Finalizing message on state:', newState, 'Message:', streamingMessageRef.current);
@@ -215,6 +237,10 @@ export default function ExplorePage() {
             streamingMessageRef.current = '';
             setCurrentStreamingMessage('');
           }
+          // Clear active action when session is complete
+          setCurrentActiveActionId(null);
+          console.log('✅ Session complete - showing final tables');
+          setIsSessionComplete(true);
         }
         break;
 
@@ -235,34 +261,9 @@ export default function ExplorePage() {
         }
 
         // Always accumulate during non-idle states
-        if (cleanText) {
+        if (cleanText && cleanText.trim() !== '') {
           console.log('📝 Accumulating text:', cleanText);
           console.log('📊 Current server state:', serverState);
-
-          // Check for CSV path in the message
-          const csvPattern = /💾 Saved to: (output\/session_([\w]+)\/([\w-]+\.csv))/g;
-          const matches = [...cleanText.matchAll(csvPattern)];
-
-          for (const match of matches) {
-            const [_, fullPath, sessionPart, filename] = match;
-            console.log('📁 Found CSV:', fullPath);
-            setDatasets(prev => {
-              // Check if this dataset already exists
-              const exists = prev.some(d =>
-                d.sessionId === sessionPart && d.filename === filename
-              );
-
-              if (!exists) {
-                return [...prev, {
-                  sessionId: sessionPart,
-                  filename: filename,
-                  path: fullPath,
-                  timestamp: new Date()
-                }];
-              }
-              return prev;
-            });
-          }
 
           streamingMessageRef.current += (streamingMessageRef.current ? '\n' : '') + cleanText;
           setCurrentStreamingMessage(streamingMessageRef.current);
@@ -281,17 +282,60 @@ export default function ExplorePage() {
       case 'log':
         console.log('Debug:', data.text);
         break;
+
+      case 'reasoning':
+        console.log('🧠 Reasoning trace received:', data.text);
+        if (data.text !== lastReasoningRef.current) {
+          addMessage('reasoning', data.text);
+          lastReasoningRef.current = data.text;
+          // Clear active action when reasoning comes in (action is complete)
+          setCurrentActiveActionId(null);
+        }
+        break;
+
+      case 'data_table':
+        console.log('📊 Data table received:', data.filename, data.data?.length, 'rows');
+        addMessage('data_table', '', data.data, data.filename);
+        break;
+
+      case 'action_status':
+        console.log('⚡ Action status received:', data.action, data.description);
+        const actionKey = `${data.action}:${data.description}`;
+        if (actionKey !== lastActionRef.current) {
+          // Generate unique ID for this specific action message
+          const newMessageId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          
+          // Add message with custom ID
+          setMessages(prev => [...prev, {
+            id: newMessageId,
+            type: 'action_status',
+            content: data.description,
+            timestamp: new Date(),
+            action: data.action,
+            workflowId: workflowIdRef.current
+          }]);
+          
+          lastActionRef.current = actionKey;
+          // Set this specific message ID as the currently active one
+          setCurrentActiveActionId(newMessageId);
+        }
+        break;
     }
   };
 
-  const addMessage = (type: Message['type'], content: string) => {
+  const addMessage = (type: Message['type'], content: string, data?: any[], filename?: string, action?: string) => {
     setMessages(prev => [...prev, {
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
       content,
-      timestamp: new Date()
+      timestamp: new Date(),
+      data,
+      filename,
+      action,
+      workflowId: workflowIdRef.current
     }]);
   };
+
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -306,14 +350,18 @@ export default function ExplorePage() {
       return;
     }
 
+    // Mark that a query has been sent (for hiding Quick Actions)
+    setHasEverSentQuery(true);
+
     // Add user message to display
     addMessage('user', inputMessage);
 
     // Include cluster context if any selected
     let messageToSend = inputMessage;
     if (selectedClusters.length > 0) {
+      const allClusters = [...availableClusters, ...savedClusters];
       const clusterNames = selectedClusters.map(id => {
-        const cluster = availableClusters.find(c => c.id === id);
+        const cluster = allClusters.find(c => c.id === id);
         return cluster?.name;
       }).filter(Boolean).join(', ');
 
@@ -342,6 +390,7 @@ export default function ExplorePage() {
       addMessage('system', '⚠️ Cannot send - server is not ready');
       return;
     }
+    setHasEverSentQuery(true);
     setInputMessage(action);
   };
 
@@ -371,118 +420,273 @@ export default function ExplorePage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
+        <Header connected={connected} />
         <main className="flex-1 flex flex-col overflow-hidden">
             {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto p-6" ref={chatContainerRef}>
               <div className="max-w-4xl mx-auto space-y-4">
-                {messages.length === 0 && connected && (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500">Connected to Healthcare Data Agent. Start by asking a question or selecting clusters to analyze.</p>
-                  </div>
-                )}
-                {messages.map((message, index) => {
-                  const isVisible = visibleMessages.some((m) => m.id === message.id);
-
-                  // Create a placeholder for non-visible messages with parallax effect
-                  if (!isVisible) {
-                    return (
-                      <div
-                        key={message.id}
-                        data-message-id={message.id}
-                        ref={(el) => {
-                          if (el) messageRefsMap.current.set(message.id, el);
-                        }}
-                        className="h-20 flex items-center justify-center opacity-0 animate-fadeIn"
-                        style={{
-                          animationDelay: `${index * 50}ms`,
-                          animationFillMode: 'forwards'
-                        }}
-                      >
-                        <div className="animate-pulse bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 rounded-lg h-12 w-3/4 shadow-sm"></div>
-                      </div>
-                    );
+                
+                {/* Show all messages in chronological order, but insert Thinking header strategically */}
+                {(() => {
+                  const result = [];
+                  let thinkingInserted = false;
+                  
+                  // Find the last user message index
+                  let lastUserMessageIndex = -1;
+                  for (let i = messages.length - 1; i >= 0; i--) {
+                    if (messages[i].type === 'user') {
+                      lastUserMessageIndex = i;
+                      break;
+                    }
                   }
 
-                  return (
-                  <div
-                    key={message.id}
-                    className={`flex ${
-                      message.type === 'user' ? 'justify-end' :
-                      message.type === 'system' || message.type === 'error' ? 'justify-center' :
-                      'justify-start'
-                    } opacity-0 animate-slideInUp`}
-                    style={{
-                      animationDelay: `${Math.min(index * 30, 300)}ms`,
-                      animationFillMode: 'forwards'
-                    }}
-                  >
-                    <div
-                      className={`max-w-3xl px-4 py-3 rounded-lg ${
-                        message.type === 'user' ? 'bg-black text-white' :
-                        message.type === 'assistant' ? 'bg-white border border-gray-200 text-gray-900' :
-                        message.type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
-                        message.type === 'prompt' ? 'bg-amber-50 border border-amber-200 text-amber-900' :
-                        message.type === 'system' ? 'bg-gray-100 text-gray-600 text-sm' :
-                        'bg-white border border-gray-200 text-gray-900'
-                      }`}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                      {message.type !== 'system' && (
-                        <p className={`text-xs mt-2 ${
-                          message.type === 'user' ? 'text-gray-300' : 'text-gray-500'
-                        }`}>
-                          {message.timestamp.toLocaleTimeString()}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  );
-                })}
+                  messages.forEach((message, index) => {
+                    const isVisible = visibleMessages.some((m) => m.id === message.id);
+                    
+                    // Skip reasoning and action_status messages for now - we'll handle them later
+                    if (message.type === 'reasoning' || message.type === 'action_status') {
+                      return;
+                    }
 
-                {/* Show processing bubbles with fade-in animation */}
-                {serverState === ServerState.PROCESSING && (
-                  <div className="flex justify-start opacity-0 animate-fadeIn" style={{ animationDelay: '100ms', animationFillMode: 'forwards' }}>
-                    <div className="bg-white border border-gray-200 px-4 py-3 rounded-lg shadow-sm">
-                      <div className="flex items-center space-x-2">
-                        <div className="flex space-x-1">
-                          <div
-                            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                            style={{
-                              marginTop: '3px',
-                              animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)'
-                            }}
-                          ></div>
-                          <div
-                            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                            style={{
-                              marginTop: '3px',
-                              animationDelay: '0.1s',
-                              animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)'
-                            }}
-                          ></div>
-                          <div
-                            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                            style={{
-                              marginTop: '3px',
-                              animationDelay: '0.2s',
-                              animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)'
-                            }}
-                          ></div>
+                    // Skip data tables if session is not complete (hide intermediate tables)
+                    if (message.type === 'data_table' && !isSessionComplete) {
+                      console.log('🚫 Hiding intermediate table:', message.filename);
+                      return;
+                    }
+
+                    // Render regular message  
+                    // Always show user messages, use intersection observer for others
+                    if (!isVisible && message.type !== 'user') {
+                      result.push(
+                        <div
+                          key={message.id}
+                          data-message-id={message.id}
+                          ref={(el) => {
+                            if (el) messageRefsMap.current.set(message.id, el);
+                          }}
+                          className="h-20 flex items-center justify-center opacity-0 animate-fadeIn"
+                          style={{
+                            animationDelay: `${index * 50}ms`,
+                            animationFillMode: 'forwards'
+                          }}
+                        >
+                          <div className="animate-pulse bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 rounded-lg h-12 w-3/4 shadow-sm"></div>
                         </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                      );
+                    } else {
+                      result.push(
+                        <div
+                          key={message.id}
+                          className={`flex ${
+                            message.type === 'user' ? 'justify-end' :
+                            message.type === 'system' || message.type === 'error' ? 'justify-center' :
+                            'justify-start'
+                          } opacity-0 animate-slideInUp`}
+                          style={{
+                            animationDelay: `${Math.min(index * 30, 300)}ms`,
+                            animationFillMode: 'forwards'
+                          }}
+                        >
+                          <div className={(() => {
+                            switch (message.type) {
+                              case 'user':
+                                return 'max-w-3xl px-4 py-3 rounded-lg bg-black text-white';
+                              case 'assistant':
+                                return 'max-w-3xl px-4 py-3 text-gray-700';
+                              case 'error':
+                                return 'max-w-3xl px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-800';
+                              case 'prompt':
+                                return 'max-w-3xl px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900';
+                              case 'data_table':
+                                return 'max-w-3xl rounded-lg bg-gray-50 border border-gray-200 p-0';
+                              case 'system':
+                                return 'max-w-3xl px-4 py-3 rounded-lg bg-gray-100 text-gray-600 text-sm';
+                              default:
+                                return 'max-w-3xl px-4 py-3 rounded-lg bg-white border border-gray-200 text-gray-900';
+                            }
+                          })()}>
+                            {message.type === 'data_table' && message.data ? (
+                              <div className="w-full">
+                                <div className="mb-3 px-4 py-2 bg-gray-100 border-b border-gray-200 flex items-center justify-between">
+                                  <div>
+                                    <span className="text-xs font-medium text-gray-600">📊 {message.filename?.replace('.csv', '')}</span>
+                                    <span className="ml-2 text-xs text-gray-500">{message.data.length} rows</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => {
+                                        setClusterToSave({data: message.data, filename: message.filename || 'cluster'});
+                                        setShowClusterPopup(true);
+                                      }}
+                                      className="flex items-center justify-center w-6 h-6 bg-blue-500 text-white rounded text-xs font-bold hover:bg-blue-600 transition-colors"
+                                      title="Save to Clusters"
+                                    >
+                                      +
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        if (sessionId && message.filename) {
+                                          const url = `http://localhost:8766/download/${sessionId}/${message.filename}`;
+                                          const link = document.createElement('a');
+                                          link.href = url;
+                                          link.download = message.filename;
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                        }
+                                      }}
+                                      className="flex items-center justify-center w-6 h-6 bg-green-500 text-white rounded text-xs font-bold hover:bg-green-600 transition-colors"
+                                      title="Download CSV"
+                                    >
+                                      ↓
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="overflow-x-auto">
+                                  <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        {Object.keys(message.data[0] || {}).map((header, idx) => (
+                                          <th
+                                            key={idx}
+                                            className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                          >
+                                            {header}
+                                          </th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                      {message.data.slice(0, 20).map((row, rowIdx) => (
+                                        <tr key={rowIdx} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                          {Object.keys(row).map((header, colIdx) => (
+                                            <td
+                                              key={colIdx}
+                                              className="px-3 py-2 text-sm text-gray-900 whitespace-nowrap"
+                                            >
+                                              {row[header]}
+                                            </td>
+                                          ))}
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                  {message.data.length > 20 && (
+                                    <div className="px-3 py-2 bg-gray-50 text-xs text-gray-500 border-t border-gray-200">
+                                      Showing first 20 of {message.data.length} rows
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Insert Thinking header right after the last user message (if thinking is active)
+                    if (index === lastUserMessageIndex && thinkingActive && !thinkingInserted) {
+                      const thinkingMessages = messages.filter(m => m.type === 'reasoning' || m.type === 'action_status');
+                      
+                      if (thinkingMessages.length > 0) {
+                        // Insert Thinking header
+                        result.push(
+                          <div key="thinking-header" className="flex justify-start">
+                            <button
+                              type="button"
+                              onClick={() => setThinkingOpen(!thinkingOpen)}
+                              className="text-sm text-gray-700 flex items-center space-x-2 hover:text-gray-900 transition-colors"
+                            >
+                              <span>Thinking…</span>
+                              <svg className={`h-4 w-4 transform transition-transform ${thinkingOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          </div>
+                        );
+
+                        // Insert thinking messages in chronological order (if expanded)
+                        if (thinkingOpen) {
+                          thinkingMessages.forEach((thinkingMessage, thinkingIndex) => {
+                            result.push(
+                              <div
+                                key={thinkingMessage.id}
+                                className="flex justify-start opacity-0 animate-slideInUp"
+                                style={{
+                                  animationDelay: `${Math.min(thinkingIndex * 20, 200)}ms`,
+                                  animationFillMode: 'forwards'
+                                }}
+                              >
+                                <div>
+                                  {thinkingMessage.type === 'action_status' && (
+                                    <span className={`inline-block text-[11px] px-2 py-0.5 rounded-full border text-gray-700 transition-all duration-500 ${
+                                      currentActiveActionId === thinkingMessage.id 
+                                        ? 'border-blue-400 bg-blue-50 shadow-blue-200 shadow-md animate-pulse ring-2 ring-blue-200' 
+                                        : 'border-gray-300 bg-gray-50'
+                                    }`}>
+                                      {thinkingMessage.content}
+                                    </span>
+                                  )}
+
+                                  {thinkingMessage.type === 'reasoning' && (
+                                    <p className="text-sm text-gray-900 whitespace-pre-wrap">{thinkingMessage.content}</p>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          });
+                        }
+                        
+                        thinkingInserted = true;
+                      }
+                    }
+                  });
+
+                  // Show thinking messages inline when thinking is not active
+                  if (!thinkingActive) {
+                    messages
+                      .filter(m => m.type === 'reasoning' || m.type === 'action_status')
+                      .forEach((message, index) => {
+                        result.push(
+                          <div
+                            key={message.id}
+                            className="flex justify-start opacity-0 animate-slideInUp"
+                            style={{
+                              animationDelay: `${Math.min(index * 20, 200)}ms`,
+                              animationFillMode: 'forwards'
+                            }}
+                          >
+                            <div>
+                              {message.type === 'action_status' && (
+                                <span className={`inline-block text-[11px] px-2 py-0.5 rounded-full border text-gray-700 transition-all duration-500 ${
+                                  currentActiveActionId === message.id 
+                                    ? 'border-blue-400 bg-blue-50 shadow-blue-200 shadow-md animate-pulse ring-2 ring-blue-200' 
+                                    : 'border-gray-300 bg-gray-50'
+                                }`}>
+                                  {message.content}
+                                </span>
+                              )}
+
+                              {message.type === 'reasoning' && (
+                                <p className="text-sm text-gray-900 whitespace-pre-wrap">{message.content}</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      });
+                  }
+
+                  return result;
+                })()}
+
 
                 {/* Show streaming message in progress with fade-in */}
                 {serverState === ServerState.STREAMING && currentStreamingMessage && (
                   <div className="flex justify-start opacity-0 animate-fadeIn" style={{ animationDelay: '50ms', animationFillMode: 'forwards' }}>
                     <div className="max-w-3xl px-4 py-3 rounded-lg bg-white border border-gray-200 text-gray-900 shadow-sm transition-all duration-200">
                       <p className="text-sm whitespace-pre-wrap">{currentStreamingMessage}</p>
-                      <p className="text-xs mt-2 text-gray-500">
-                        {new Date().toLocaleTimeString()}
-                      </p>
                     </div>
                   </div>
                 )}
@@ -491,88 +695,44 @@ export default function ExplorePage() {
               </div>
             </div>
 
-            {/* CSV Downloads Section */}
-            {datasets.length > 0 && (
-              <div className="border-t border-gray-200 bg-gray-50 px-6 py-4">
-                <div className="max-w-4xl mx-auto">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-medium text-gray-900">📁 Generated Datasets</h3>
-                    <button
-                      onClick={() => setDatasets([])}
-                      className="text-xs text-gray-500 hover:text-gray-700"
-                    >
-                      Clear all
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {datasets.map((dataset, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-gray-200"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {dataset.filename}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Session: {dataset.sessionId.slice(0, 8)}...
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            const url = `http://localhost:8766/download/${dataset.sessionId}/${dataset.filename}`;
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.download = dataset.filename;
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                          }}
-                          className="ml-2 px-3 py-1 text-xs bg-black text-white rounded hover:bg-gray-800 transition-colors"
-                        >
-                          Download
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+
 
             {/* Enhanced Chat Input */}
             <div className="border-t border-gray-200 bg-white p-6">
               <div className="max-w-4xl mx-auto">
 
-                {/* Quick Actions */}
-                <div className="mb-4">
-                  <span className="text-sm font-medium text-gray-700 mb-2 block">Quick Actions</span>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => handleQuickAction('Find HCPs that are in all of my selected clusters')}
-                      className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
-                    >
-                      Find the intersection of my selected clusters 
-                    </button>
-                    <button
-                      onClick={() => handleQuickAction('Rank the top 20 high decile HCPs by payments from competitors')}
-                      className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
-                    >
-                      Rank the top 20 high decile HCPs by payments from competitors
-                    </button>
-                    <button
-                      onClick={() => handleQuickAction('Create a new cluster of doctors in CA who have not prescribed an Abbvie drug in the last 3 months')}
-                      className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
-                    >
-                      Create a cluster of doctors in CA who have not prescribed an Abbvie drug in the last 3 months
-                    </button>
-                    <button
-                      onClick={() => handleQuickAction('Rank HCPs in these clusters by number of publications')}
-                      className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
-                    >
-                      Rank HCPs in these clusters by number of publications
-                    </button>
+                {/* Quick Actions - only show at the very beginning before any queries */}
+                {!hasEverSentQuery && (serverState === ServerState.IDLE || serverState === ServerState.WAITING_INPUT) && (
+                  <div className="mb-4">
+                    <span className="text-sm font-medium text-gray-700 mb-2 block">Quick Actions</span>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleQuickAction('Find HCPs that are in all of my selected clusters')}
+                        className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
+                      >
+                        Find the intersection of my selected clusters 
+                      </button>
+                      <button
+                        onClick={() => handleQuickAction('Rank the top 20 high decile HCPs by payments from competitors')}
+                        className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
+                      >
+                        Rank the top 20 high decile HCPs by payments from competitors
+                      </button>
+                      <button
+                        onClick={() => handleQuickAction('Create a new cluster of doctors in CA who have not prescribed an Abbvie drug in the last 3 months')}
+                        className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
+                      >
+                        Create a cluster of doctors in CA who have not prescribed an Abbvie drug in the last 3 months
+                      </button>
+                      <button
+                        onClick={() => handleQuickAction('Rank HCPs in these clusters by number of publications')}
+                        className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
+                      >
+                        Rank HCPs in these clusters by number of publications
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Selected Clusters */}
                 {selectedClusters.length > 0 && (
@@ -588,7 +748,8 @@ export default function ExplorePage() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {selectedClusters.map(clusterId => {
-                        const cluster = availableClusters.find(c => c.id === clusterId);
+                        const allClusters = [...availableClusters, ...savedClusters];
+                        const cluster = allClusters.find(c => c.id === clusterId);
                         return cluster ? (
                           <span
                             key={clusterId}
@@ -637,7 +798,7 @@ export default function ExplorePage() {
                           <span className="text-sm font-medium text-gray-900">Select Clusters</span>
                         </div>
                         <div className="max-h-64 overflow-y-auto">
-                          {availableClusters.map((cluster) => (
+                          {[...availableClusters, ...savedClusters].map((cluster) => (
                             <button
                               key={cluster.id}
                               type="button"
@@ -682,12 +843,6 @@ export default function ExplorePage() {
                     type="text"
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage(e);
-                      }
-                    }}
                     placeholder={connected ? "Ask me anything about healthcare data..." : "Not connected..."}
                     className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent text-sm"
                     disabled={!connected || (serverState !== ServerState.IDLE && serverState !== ServerState.WAITING_INPUT)}
@@ -703,6 +858,87 @@ export default function ExplorePage() {
               </div>
             </div>
         </main>
+
+        {/* Cluster Save Popup */}
+        {showClusterPopup && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-96 max-w-90vw">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Save to Clusters</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Cluster Name
+                  </label>
+                  <input
+                    type="text"
+                    value={clusterName}
+                    onChange={(e) => setClusterName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter cluster name..."
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={clusterDescription}
+                    onChange={(e) => setClusterDescription(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Enter cluster description..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowClusterPopup(false);
+                    setClusterName('');
+                    setClusterDescription('');
+                    setClusterToSave(null);
+                  }}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (clusterName.trim() && clusterToSave) {
+                      const newCluster: Cluster = {
+                        id: `saved-${Date.now()}`,
+                        name: clusterName.trim(),
+                        size: clusterToSave.data.length,
+                        description: clusterDescription.trim() || undefined,
+                        filename: clusterToSave.filename,
+                        data: clusterToSave.data
+                      };
+                      
+                      setSavedClusters(prev => {
+                        const updated = [...prev, newCluster];
+                        // Store in sessionStorage for cross-tab communication
+                        sessionStorage.setItem('savedClusters', JSON.stringify(updated));
+                        return updated;
+                      });
+                      
+                      setShowClusterPopup(false);
+                      setClusterName('');
+                      setClusterDescription('');
+                      setClusterToSave(null);
+                    }
+                  }}
+                  disabled={!clusterName.trim()}
+                  className="px-4 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Save Cluster
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

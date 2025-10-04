@@ -82,6 +82,13 @@ class BigQuerySQLQuery(Tool):
             if csv_path:
                 tool_log("bigquery_sql", f"CSV saved: {csv_path}")
 
+            # Send data table to frontend immediately
+            io_handler = getattr(context, 'io_handler', None)
+            if io_handler and hasattr(io_handler, 'send_data_table'):
+                # Convert Polars DataFrame to list of dictionaries for JSON serialization
+                table_data = df.to_dicts()
+                io_handler.send_data_table(table_data, f"{dataset_name}.csv", context.session_id)
+
             # Store in context
             context.store_dataframe(dataset_name, df, sql, csv_path)
 

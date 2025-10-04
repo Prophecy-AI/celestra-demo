@@ -15,6 +15,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from dotenv import load_dotenv
 
 # Add parent directories to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -282,6 +283,24 @@ async def run_servers():
 
 def main():
     """Main entry point"""
+    # Load environment variables
+    load_dotenv()
+    
+    # Validate required environment variables
+    required_vars = ["ANTHROPIC_API_KEY", "GCP_PROJECT"]
+    missing = []
+    
+    for var in required_vars:
+        if not os.getenv(var):
+            missing.append(var)
+    
+    if missing:
+        print(f"❌ Missing required environment variables: {', '.join(missing)}")
+        print("Please set them in your .env file")
+        sys.exit(1)
+    
+    print("✅ Environment validated")
+    
     try:
         asyncio.run(run_servers())
     except KeyboardInterrupt:

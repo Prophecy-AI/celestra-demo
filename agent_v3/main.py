@@ -9,6 +9,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from .orchestrator import RecursiveOrchestrator
 from langfuse import Langfuse, observe, get_client
+from .io_handler import CLIHandler
 
 load_dotenv()
 langfuse = Langfuse(
@@ -77,7 +78,8 @@ def run_interactive(debug: bool = False):
 
             # Initialize orchestrator
             print("\n🔄 Processing your request...\n")
-            orchestrator = RecursiveOrchestrator(session_id, debug=debug)
+            io_handler = CLIHandler()
+            orchestrator = RecursiveOrchestrator(session_id, debug=debug, io_handler=io_handler)
 
             # Run the orchestration
             start_time = time.time()
@@ -121,7 +123,8 @@ def run_single_query(query: str, debug: bool = False):
     print(f"\n🔄 Processing query: {query}\n")
 
     # Initialize orchestrator
-    orchestrator = RecursiveOrchestrator(session_id, debug=debug)
+    io_handler = CLIHandler()
+    orchestrator = RecursiveOrchestrator(session_id, debug=debug, io_handler=io_handler)
 
     # Run the orchestration
     start_time = time.time()

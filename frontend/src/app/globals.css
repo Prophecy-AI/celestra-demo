@@ -64,3 +64,18 @@ body {
 .animate-scaleIn {
   animation: scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+@keyframes pulseSoft {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.9;
+  }
+}
+
+.status-pulse {
+  animation: pulseSoft 1.6s ease-in-out infinite;
+}
