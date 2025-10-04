@@ -19,14 +19,29 @@ class TextToSQLRx(Tool):
             description="Convert natural language request to SQL for rx_claims table"
         )
         self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.system_prompt = self._build_system_prompt()
+        from agent_v3.prompts.loader import PromptLoader
+        self.prompt_loader = PromptLoader()
 
     def _build_system_prompt(self) -> str:
-        """Build the system prompt with data dictionary"""
+        """Load system prompt from YAML file"""
         from datetime import datetime
-        
+
         current_date = datetime.now().strftime("%Y-%m-%d")
-        
+
+        return self.prompt_loader.load_prompt(
+            "text_to_sql_rx",
+            variables={
+                "current_date": current_date,
+                "table_name": "`unique-bonbon-472921-q8.Claims.rx_claims`"
+            }
+        )
+
+    def _build_system_prompt_old(self) -> str:
+        """DEPRECATED: Old inline prompt - kept for reference"""
+        from datetime import datetime
+
+        current_date = datetime.now().strftime("%Y-%m-%d")
+
         return f"""
 You are a BigQuery Standard SQL generator for prescription (Rx) claims data analysis.
 
@@ -131,7 +146,7 @@ OUTPUT FORMAT:
                 model="claude-sonnet-4-20250514",
                 max_tokens=2048,
                 temperature=0,
-                system=self.system_prompt,
+                system=self._build_system_prompt(),
                 messages=[{"role": "user", "content": request}]
             )
 
@@ -245,14 +260,29 @@ class TextToSQLMed(Tool):
             description="Convert natural language request to SQL for med_claims table"
         )
         self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.system_prompt = self._build_system_prompt()
+        from agent_v3.prompts.loader import PromptLoader
+        self.prompt_loader = PromptLoader()
 
     def _build_system_prompt(self) -> str:
-        """Build the system prompt with data dictionary"""
+        """Load system prompt from YAML file"""
         from datetime import datetime
-        
+
         current_date = datetime.now().strftime("%Y-%m-%d")
-        
+
+        return self.prompt_loader.load_prompt(
+            "text_to_sql_med",
+            variables={
+                "current_date": current_date,
+                "table_name": "`unique-bonbon-472921-q8.Claims.medical_claims`"
+            }
+        )
+
+    def _build_system_prompt_old(self) -> str:
+        """DEPRECATED: Old inline prompt - kept for reference"""
+        from datetime import datetime
+
+        current_date = datetime.now().strftime("%Y-%m-%d")
+
         return f"""
 You are a BigQuery Standard SQL generator for medical claims data analysis.
 
@@ -349,7 +379,7 @@ OUTPUT FORMAT:
                 model="claude-sonnet-4-20250514",
                 max_tokens=2048,
                 temperature=0,
-                system=self.system_prompt,
+                system=self._build_system_prompt(),
                 messages=[{"role": "user", "content": request}]
             )
 
@@ -464,10 +494,20 @@ class TextToSQLProviderPayments(Tool):
             description="Convert natural language request to SQL for provider_payments table"
         )
         self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.system_prompt = self._build_system_prompt()
+        from agent_v3.prompts.loader import PromptLoader
+        self.prompt_loader = PromptLoader()
 
     def _build_system_prompt(self) -> str:
-        """Build the system prompt with data dictionary"""
+        """Load system prompt from YAML file"""
+        return self.prompt_loader.load_prompt(
+            "text_to_sql_provider_payments",
+            variables={
+                "table_name": "`unique-bonbon-472921-q8.HCP.provider_payments`"
+            }
+        )
+
+    def _build_system_prompt_old(self) -> str:
+        """DEPRECATED: Old inline prompt - kept for reference"""
         return """
 You are a BigQuery Standard SQL generator for Healthcare Providers Payments data analysis.
 
@@ -547,7 +587,7 @@ OUTPUT FORMAT:
                 model="claude-sonnet-4-20250514",
                 max_tokens=2048,
                 temperature=0,
-                system=self.system_prompt,
+                system=self._build_system_prompt(),
                 messages=[{"role": "user", "content": request}]
             )
 
@@ -683,7 +723,7 @@ OUTPUT FORMAT:
 
 
 class TextToSQLProvidersBio(Tool):
-    """Generate SQL for rx_claims table queries"""
+    """Generate SQL for providers_bio table queries"""
 
     def __init__(self):
         super().__init__(
@@ -691,10 +731,20 @@ class TextToSQLProvidersBio(Tool):
             description="Convert natural language request to SQL for providers_bio table"
         )
         self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.system_prompt = self._build_system_prompt()
+        from agent_v3.prompts.loader import PromptLoader
+        self.prompt_loader = PromptLoader()
 
     def _build_system_prompt(self) -> str:
-        """Build the system prompt with data dictionary"""
+        """Load system prompt from YAML file"""
+        return self.prompt_loader.load_prompt(
+            "text_to_sql_providers_bio",
+            variables={
+                "table_name": "`unique-bonbon-472921-q8.HCP.providers_bio`"
+            }
+        )
+
+    def _build_system_prompt_old(self) -> str:
+        """DEPRECATED: Old inline prompt - kept for reference"""
         return """
 You are a BigQuery Standard SQL generator for Healthcare Providers Biographical data analysis.
 
@@ -753,7 +803,7 @@ OUTPUT FORMAT:
                 model="claude-sonnet-4-20250514",
                 max_tokens=2048,
                 temperature=0,
-                system=self.system_prompt,
+                system=self._build_system_prompt(),
                 messages=[{"role": "user", "content": request}]
             )
 

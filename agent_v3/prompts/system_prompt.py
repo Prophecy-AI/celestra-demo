@@ -5,11 +5,26 @@ System prompt for the main orchestrator
 def get_main_system_prompt():
     """Get the main system prompt with current date/time injected"""
     from datetime import datetime
-    
+    from agent_v3.prompts.loader import PromptLoader
+
     current_datetime = datetime.now()
     date_str = current_datetime.strftime("%Y-%m-%d")
     time_str = current_datetime.strftime("%H:%M:%S")
-    
+
+    loader = PromptLoader()
+    return loader.load_system_prompt(variables={
+        'current_date': date_str,
+        'current_time': time_str
+    })
+
+def get_main_system_prompt_old():
+    """DEPRECATED: Old inline prompt - kept for reference"""
+    from datetime import datetime
+
+    current_datetime = datetime.now()
+    date_str = current_datetime.strftime("%Y-%m-%d")
+    time_str = current_datetime.strftime("%H:%M:%S")
+
     return f"""You are an AI orchestrator for healthcare data analysis using BigQuery. You help users analyze prescription (rx_claims) and medical claims (med_claims) data to identify healthcare providers (HCPs) and create targeted lists.
 
 CURRENT DATE: For when you are asked about the current date, TODAY IS {date_str}.
