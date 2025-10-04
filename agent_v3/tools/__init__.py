@@ -5,20 +5,13 @@ from .sql_generation import TextToSQLRx, TextToSQLMed, TextToSQLProvidersBio, Te
 from .sql_execution import BigQuerySQLQuery
 from .io_tools import Communicate, Complete
 from .base import Tool, ToolResult
+from .registry import ToolRegistry
+from .generator import ToolGenerator
 
-# Initialize all tools
+# Initialize all tools using the registry
 def get_all_tools():
-    """Return dictionary of all available tools"""
-    tools = {
-        "text_to_sql_rx": TextToSQLRx(),
-        "text_to_sql_med": TextToSQLMed(),
-        "text_to_sql_provider_payments": TextToSQLProviderPayments(),
-        "text_to_sql_providers_bio": TextToSQLProvidersBio(),
-        "bigquery_sql_query": BigQuerySQLQuery(),
-        "communicate": Communicate(),
-        "complete": Complete()
-    }
-    return tools
+    """Return dictionary of all available tools (uses ToolRegistry)"""
+    return ToolRegistry.get_all_tools()
 
 __all__ = [
     "TextToSQLRx",
@@ -30,5 +23,7 @@ __all__ = [
     "Complete",
     "Tool",
     "ToolResult",
+    "ToolRegistry",
+    "ToolGenerator",
     "get_all_tools"
 ]
