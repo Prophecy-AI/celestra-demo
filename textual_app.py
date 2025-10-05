@@ -432,7 +432,7 @@ class AgentToolManager(App):
     """
 
     BINDINGS = [
-        Binding("ctrl+q", "quit", "Quit"),
+        Binding("ctrl+q", "request_quit", "Quit"),
         Binding("ctrl+s", "save", "Save"),
         Binding("ctrl+n", "new_tool", "New Tool"),
     ]
@@ -576,8 +576,8 @@ class AgentToolManager(App):
         """Create new tool (Ctrl+N)"""
         self.push_screen(AddToolModal(), self.on_tool_created)
 
-    def action_quit(self) -> None:
-        """Override quit to check for unsaved changes"""
+    def action_request_quit(self) -> None:
+        """Request quit with check for unsaved changes"""
         # If not in staging, just quit
         if not self.is_staging:
             self.exit()
