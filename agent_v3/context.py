@@ -37,6 +37,8 @@ class Context:
         self.max_depth = 30
         self.created_at = datetime.now()
         self.original_user_query: Optional[str] = None  # Store original query for evaluations
+        self.sandbox: Optional[Any] = None  # Modal Sandbox instance
+        self.sandbox_mounted: bool = False  # CSV mount status
 
     def add_user_message(self, content: str) -> None:
         """Add user message to conversation history"""
@@ -199,3 +201,11 @@ class Context:
             "errors": [t for t in self.tool_history if t.error],
             "duration": time.time() - self.created_at.timestamp()
         }
+
+    def cleanup(self) -> None:
+        """Cleanup resources on session end"""
+        if self.sandbox:
+            try:
+                self.sandbox.terminate()
+            except Exception:
+                pass  # Sandbox cleanup is best-effort

@@ -81,28 +81,32 @@ def run_interactive(debug: bool = False):
             io_handler = CLIHandler()
             orchestrator = RecursiveOrchestrator(session_id, debug=debug, io_handler=io_handler)
 
-            # Run the orchestration
-            start_time = time.time()
-            result = orchestrator.run(user_input)
-            duration = time.time() - start_time
+            try:
+                # Run the orchestration
+                start_time = time.time()
+                result = orchestrator.run(user_input)
+                duration = time.time() - start_time
 
-            # Display results summary
-            if result.get("success"):
-                print("\n" + "="*80)
-                print("✅ SESSION COMPLETED SUCCESSFULLY")
-                print("="*80)
-                summary = result.get("summary", {})
-                print(f"📊 Datasets created: {summary.get('datasets_created', 0)}")
-                print(f"🔧 Tools executed: {summary.get('total_tools_executed', 0)}")
-                print(f"📈 Total rows collected: {summary.get('total_rows', 0):,}")
-                print(f"⏱️  Duration: {duration:.1f} seconds")
-                print(f"💾 Session ID: {session_id}")
-            else:
-                print("\n" + "="*80)
-                print("⚠️  SESSION ENDED WITH ISSUES")
-                print("="*80)
-                if result.get("error"):
-                    print(f"Error: {result['error']}")
+                # Display results summary
+                if result.get("success"):
+                    print("\n" + "="*80)
+                    print("✅ SESSION COMPLETED SUCCESSFULLY")
+                    print("="*80)
+                    summary = result.get("summary", {})
+                    print(f"📊 Datasets created: {summary.get('datasets_created', 0)}")
+                    print(f"🔧 Tools executed: {summary.get('total_tools_executed', 0)}")
+                    print(f"📈 Total rows collected: {summary.get('total_rows', 0):,}")
+                    print(f"⏱️  Duration: {duration:.1f} seconds")
+                    print(f"💾 Session ID: {session_id}")
+                else:
+                    print("\n" + "="*80)
+                    print("⚠️  SESSION ENDED WITH ISSUES")
+                    print("="*80)
+                    if result.get("error"):
+                        print(f"Error: {result['error']}")
+            finally:
+                # Cleanup sandbox resources
+                orchestrator.context.cleanup()
 
         except KeyboardInterrupt:
             print("\n\n🛑 Interrupted by user")
@@ -126,19 +130,23 @@ def run_single_query(query: str, debug: bool = False):
     io_handler = CLIHandler()
     orchestrator = RecursiveOrchestrator(session_id, debug=debug, io_handler=io_handler)
 
-    # Run the orchestration
-    start_time = time.time()
-    result = orchestrator.run(query)
-    duration = time.time() - start_time
+    try:
+        # Run the orchestration
+        start_time = time.time()
+        result = orchestrator.run(query)
+        duration = time.time() - start_time
 
-    # Display results
-    if result.get("success"):
-        print("\n✅ Query completed successfully")
-        summary = result.get("summary", {})
-        print(f"📊 Datasets: {', '.join(summary.get('dataset_names', []))}")
-        print(f"⏱️  Duration: {duration:.1f}s")
-    else:
-        print(f"\n❌ Query failed: {result.get('error', 'Unknown error')}")
+        # Display results
+        if result.get("success"):
+            print("\n✅ Query completed successfully")
+            summary = result.get("summary", {})
+            print(f"📊 Datasets: {', '.join(summary.get('dataset_names', []))}")
+            print(f"⏱️  Duration: {duration:.1f}s")
+        else:
+            print(f"\n❌ Query failed: {result.get('error', 'Unknown error')}")
+    finally:
+        # Cleanup sandbox resources
+        orchestrator.context.cleanup()
 
 @observe
 def main():
