@@ -1,29 +1,37 @@
 """
 System prompt for the main orchestrator
 """
+from datetime import datetime
+
 
 def get_main_system_prompt():
-    """Get the main system prompt with current date/time injected"""
-    from datetime import datetime
-    from agent_v3.prompts.loader import PromptLoader
+    """Get the main system prompt with current date/time and dynamic tools list injected"""
+    from agent_v3.tools import (
+        TextToSQLRx,
+        TextToSQLMed,
+        TextToSQLProviderPayments,
+        TextToSQLProvidersBio,
+        BigQuerySQLQuery,
+        Communicate,
+        Complete
+    )
 
+    # Build tools list dynamically from tool classes
+    tool_classes = [
+        TextToSQLRx,
+        TextToSQLMed,
+        TextToSQLProviderPayments,
+        TextToSQLProvidersBio,
+        BigQuerySQLQuery,
+        Communicate,
+        Complete
+    ]
+
+    tools_list = '\n'.join([tool.get_orchestrator_info() for tool in tool_classes])
+
+    # Get current date/time
     current_datetime = datetime.now()
     date_str = current_datetime.strftime("%Y-%m-%d")
-    time_str = current_datetime.strftime("%H:%M:%S")
-
-    loader = PromptLoader()
-    return loader.load_system_prompt(variables={
-        'current_date': date_str,
-        'current_time': time_str
-    })
-
-def get_main_system_prompt_old():
-    """DEPRECATED: Old inline prompt - kept for reference"""
-    from datetime import datetime
-
-    current_datetime = datetime.now()
-    date_str = current_datetime.strftime("%Y-%m-%d")
-    time_str = current_datetime.strftime("%H:%M:%S")
 
     return f"""You are an AI orchestrator for healthcare data analysis using BigQuery. You help users analyze prescription (rx_claims) and medical claims (med_claims) data to identify healthcare providers (HCPs) and create targeted lists.
 
@@ -73,26 +81,7 @@ For complete:
 - "I'm preparing a concise summary that gets straight to the point"
 
 Tools:
-- text_to_sql_rx: Generate SQL over Rx prescriptions (Claims.rx_claims). Use for drug/NDC/prescriber queries, fill dates, quantities, days supply, payer channels, and date windows. Not for diagnoses/procedures, provider bios, or provider payments.
-  Parameters: {{"request": "natural language description"}}
-
-- text_to_sql_med: Generate SQL over medical claims (Claims.medical_claims). Use for HCP/HCO, diagnosis (condition_label), procedure codes/descriptions, charges, distinct patients/claim counts, states, and date windows. Not for Rx fills/NDCs, provider bios, or provider payments.
-  Parameters: {{"request": "natural language description"}}
-
-- text_to_sql_provider_payments: Generate SQL over provider payments (HCP.provider_payments). Use for payments to NPIs by payer_company, associated_product, nature_of_payment, product_type, program_year; totals and breakdowns. Not for Rx/medical claims or provider bios.
-  Parameters: {{"request": "natural language description"}}
-
-- text_to_sql_providers_bio: Generate SQL over provider bios (HCP.providers_bio). Use for specialty, title, certifications, education, awards, memberships, conditions_treated. Not for Rx/medical claims or provider payments.
-  Parameters: {{"request": "natural language description"}}
-
-- bigquery_sql_query: Execute SQL and get results
-  Parameters: {{"sql": "SQL query", "dataset_name": "descriptive_name"}}
-
-- communicate: Ask user for clarification
-  Parameters: {{"message": "question or update for user (use markdown formatting when appropriate)"}}
-
-- complete: Present final results to user
-  Parameters: {{"summary": "brief conversational summary (2-3 sentences max)", "datasets": ["dataset1", "dataset2"]}}
+{tools_list}
 
 ## TOOL SEQUENCING
 
@@ -172,5 +161,6 @@ When using the "complete" tool:
 - Use natural language: "I found..." not "Found **X results**"
 - Don't include table previews, SQL queries, or verbose formatting
 - Let the frontend handle displaying the data tables"""
+
 
 MAIN_SYSTEM_PROMPT = get_main_system_prompt()

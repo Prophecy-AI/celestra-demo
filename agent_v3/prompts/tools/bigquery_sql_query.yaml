@@ -1,4 +1,0 @@
-name: "bigquery_sql_query"
-path: "agent_v3.tools.bigquery_sql_query.BigQuerySQLQuery"
-enabled: true
-description: "Execute SQL and get results"

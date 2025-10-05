@@ -1,4 +1,0 @@
-name: "complete"
-path: "agent_v3.tools.complete.Complete"
-enabled: true
-description: "Present final results to user"

@@ -1,17 +1,28 @@
 """
 Tools package for agent_v3
 """
-from .sql_generation import TextToSQLRx, TextToSQLMed, TextToSQLProvidersBio, TextToSQLProviderPayments
-from .sql_execution import BigQuerySQLQuery
-from .io_tools import Communicate, Complete
 from .base import Tool, ToolResult
-from .registry import ToolRegistry
-from .generator import ToolGenerator
+from .text_to_sql_rx import TextToSQLRx
+from .text_to_sql_med import TextToSQLMed
+from .text_to_sql_provider_payments import TextToSQLProviderPayments
+from .text_to_sql_providers_bio import TextToSQLProvidersBio
+from .bigquery_sql_query import BigQuerySQLQuery
+from .communicate import Communicate
+from .complete import Complete
 
-# Initialize all tools using the registry
+
 def get_all_tools():
-    """Return dictionary of all available tools (uses ToolRegistry)"""
-    return ToolRegistry.get_all_tools()
+    """Return dictionary of all available tools"""
+    return {
+        "text_to_sql_rx": TextToSQLRx(),
+        "text_to_sql_med": TextToSQLMed(),
+        "text_to_sql_provider_payments": TextToSQLProviderPayments(),
+        "text_to_sql_providers_bio": TextToSQLProvidersBio(),
+        "bigquery_sql_query": BigQuerySQLQuery(),
+        "communicate": Communicate(),
+        "complete": Complete(),
+    }
+
 
 __all__ = [
     "TextToSQLRx",
@@ -23,7 +34,5 @@ __all__ = [
     "Complete",
     "Tool",
     "ToolResult",
-    "ToolRegistry",
-    "ToolGenerator",
     "get_all_tools"
 ]

@@ -1,4 +1,0 @@
-name: "text_to_sql_rx"
-path: "agent_v3.tools.text_to_sql_rx.TextToSQLRx"
-enabled: true
-description: "Generate SQL for Rx claims data"

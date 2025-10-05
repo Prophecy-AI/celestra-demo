@@ -1,4 +1,0 @@
-name: "communicate"
-path: "agent_v3.tools.communicate.Communicate"
-enabled: true
-description: "Ask user for clarification"
