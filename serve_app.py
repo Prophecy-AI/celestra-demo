@@ -10,7 +10,6 @@ if __name__ == "__main__":
         "python textual_app.py",
         host="localhost",  # Localhost only - not accessible from other machines
         port=8000,
-        debug=True,
     )
 
     print("🌐 Starting Agent Tool Manager web server...")
