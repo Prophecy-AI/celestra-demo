@@ -37,10 +37,12 @@ class SandboxEditFile(Tool):
         old_string = parameters["old_string"]
         new_string = parameters["new_string"]
 
-        tool_log("sandbox_edit_file", f"Editing: {file_path}")
+        tool_log("sandbox_edit_file", f"Request to edit: {file_path}")
+        tool_log("sandbox_edit_file", f"Replace: '{old_string[:50]}...' -> '{new_string[:50]}...'")
 
         # Validate sandbox exists
         if not context.sandbox:
+            tool_log("sandbox_edit_file", "No sandbox exists - cannot edit file", "error")
             return ToolResult(
                 success=False,
                 data={},
@@ -49,6 +51,7 @@ class SandboxEditFile(Tool):
 
         try:
             sandbox = context.sandbox
+            tool_log("sandbox_edit_file", f"Reading file from sandbox {sandbox.object_id}")
 
             # Read file content
             result = sandbox.exec("cat", file_path)
@@ -56,6 +59,7 @@ class SandboxEditFile(Tool):
 
             if result.returncode != 0:
                 error_msg = result.stderr.read() if result.stderr else "File not found"
+                tool_log("sandbox_edit_file", f"Cannot read {file_path}: {error_msg}", "error")
                 return ToolResult(
                     success=False,
                     data={},
@@ -63,11 +67,15 @@ class SandboxEditFile(Tool):
                 )
 
             content = result.stdout.read()
+            tool_log("sandbox_edit_file", f"File content: {len(content)} bytes, {len(content.splitlines())} lines")
 
             # Count occurrences of old_string
             count = content.count(old_string)
+            tool_log("sandbox_edit_file", f"Found {count} occurrence(s) of old_string")
 
             if count == 0:
+                tool_log("sandbox_edit_file", f"old_string not found in {file_path}", "error")
+                tool_log("sandbox_edit_file", f"File contains: {content[:200]}...", "error")
                 return ToolResult(
                     success=False,
                     data={},
@@ -75,6 +83,7 @@ class SandboxEditFile(Tool):
                 )
 
             if count > 1:
+                tool_log("sandbox_edit_file", f"old_string not unique: found {count} times", "error")
                 return ToolResult(
                     success=False,
                     data={},
@@ -83,12 +92,13 @@ class SandboxEditFile(Tool):
 
             # Replace (exactly once)
             new_content = content.replace(old_string, new_string, 1)
+            tool_log("sandbox_edit_file", f"Replacement complete, writing {len(new_content)} bytes back to file")
 
             # Write back
             with sandbox.open(file_path, 'w') as f:
                 f.write(new_content)
 
-            tool_log("sandbox_edit_file", "File edited successfully")
+            tool_log("sandbox_edit_file", f"Successfully edited {file_path}")
 
             return ToolResult(
                 success=True,
@@ -98,7 +108,8 @@ class SandboxEditFile(Tool):
             )
 
         except Exception as e:
-            tool_log("sandbox_edit_file", f"Failed: {str(e)}", "error")
+            tool_log("sandbox_edit_file", f"Edit exception: {type(e).__name__}: {str(e)}", "error")
+            tool_log("sandbox_edit_file", f"Failed file: {file_path}", "error")
             return ToolResult(
                 success=False,
                 data={},
@@ -106,17 +117,19 @@ class SandboxEditFile(Tool):
             )
 
     def get_success_hint(self, context: 'Context') -> Optional[str]:
-        """Provide hint after successful edit"""
-        return "File edited successfully. Re-run with sandbox_exec."
+        """Provide hint after successful edit (non-prescriptive)"""
+        last_result = context.get_last_tool_result()
+        file_path = last_result.get("file_path", "file")
+        return f"File edited: {file_path}. Explore results or communicate with user about next steps."
 
     def get_error_hint(self, context: 'Context') -> Optional[str]:
-        """Provide hint after edit error"""
+        """Provide hint after edit error (non-prescriptive)"""
         last_result = context.get_last_tool_result()
         error = last_result.get("error", "")
 
         if "not unique" in error:
-            return "Edit failed - old_string not unique. Read file with sandbox_exec and include more surrounding context."
+            return "Edit failed - old_string appeared multiple times. Consider viewing the file to identify unique context, or ask user for clarification."
         elif "not found" in error:
-            return "Edit failed - old_string not found. Read file first with sandbox_exec to see current content."
+            return "Edit failed - old_string not found. Consider viewing file contents or asking user to verify the expected content."
 
-        return super().get_error_hint(context)
+        return "Edit operation failed. Consider viewing file contents or asking user for clarification on the intended change."
