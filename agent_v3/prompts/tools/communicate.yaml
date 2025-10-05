@@ -1,0 +1,6 @@
+name: "communicate"
+description: "Ask user for clarification"
+
+orchestrator_info: |
+  - communicate: Ask user for clarification
+    Parameters: {"message": "question or update for user (use markdown formatting when appropriate)"}

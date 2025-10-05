@@ -17,7 +17,7 @@ class PromptLoader:
         self.tools_dir = self.prompts_dir / "tools"
         self.system_dir = self.prompts_dir / "system"
 
-    def load_prompt(self, prompt_name: str, variables: Optional[Dict[str, Any]] = None) -> str:
+    def load_prompt(self, prompt_name: str, variables: Optional[Dict[str, Any]] = None) -> Optional[str]:
         """
         Load a tool prompt YAML file and render it with variables
 
@@ -26,11 +26,11 @@ class PromptLoader:
             variables: Dict of variables to inject into the template
 
         Returns:
-            Rendered prompt string
+            Rendered prompt string, or None if no system_prompt field exists
 
         Raises:
             FileNotFoundError: If prompt file doesn't exist
-            ValueError: If YAML is invalid or missing required fields
+            ValueError: If YAML is invalid
         """
         prompt_path = self.tools_dir / f"{prompt_name}.yaml"
 
@@ -45,8 +45,9 @@ class PromptLoader:
         if not isinstance(prompt_data, dict):
             raise ValueError(f"Prompt file must contain a YAML dictionary: {prompt_path}")
 
+        # Return None if no system_prompt (e.g., for non-LLM tools)
         if 'system_prompt' not in prompt_data:
-            raise ValueError(f"Prompt file missing 'system_prompt' field: {prompt_path}")
+            return None
 
         prompt_template = prompt_data['system_prompt']
 
@@ -60,7 +61,7 @@ class PromptLoader:
 
     def load_system_prompt(self, variables: Optional[Dict[str, Any]] = None) -> str:
         """
-        Load the main orchestrator system prompt
+        Load the main orchestrator system prompt with dynamic tools list
 
         Args:
             variables: Dict of variables to inject (e.g., current_date, current_time)
@@ -94,10 +95,66 @@ class PromptLoader:
                 'current_time': datetime.now().strftime("%H:%M:%S")
             }
 
+        # Build dynamic tools list from all tool YAMLs
+        tools_list = self._build_tools_list()
+        variables['tools_list'] = tools_list
+
         # Render with Jinja2
         template = Template(prompt_template)
         rendered = template.render(**variables)
         return rendered
+
+    def _build_tools_list(self) -> str:
+        """
+        Build tools list from tool YAMLs specified in main_orchestrator.yaml
+
+        Returns:
+            Concatenated string of all tool descriptions for orchestrator
+        """
+        # Load main orchestrator to get tools list
+        prompt_path = self.system_dir / "main_orchestrator.yaml"
+
+        if not prompt_path.exists():
+            return ""
+
+        try:
+            with open(prompt_path, 'r', encoding='utf-8') as f:
+                orchestrator_data = yaml.safe_load(f)
+        except Exception:
+            return ""
+
+        if not isinstance(orchestrator_data, dict) or 'tools' not in orchestrator_data:
+            return ""
+
+        tool_names = orchestrator_data['tools']
+        if not isinstance(tool_names, list):
+            return ""
+
+        tool_infos = []
+
+        # Load each specified tool YAML and extract orchestrator_info
+        for tool_name in tool_names:
+            tool_path = self.tools_dir / f"{tool_name}.yaml"
+
+            if not tool_path.exists():
+                continue
+
+            try:
+                with open(tool_path, 'r', encoding='utf-8') as f:
+                    tool_data = yaml.safe_load(f)
+
+                # Extract orchestrator_info if it exists
+                if isinstance(tool_data, dict) and 'orchestrator_info' in tool_data:
+                    orchestrator_info = tool_data['orchestrator_info']
+                    if orchestrator_info and isinstance(orchestrator_info, str):
+                        tool_infos.append(orchestrator_info.strip())
+
+            except Exception:
+                # Skip invalid YAML files silently
+                continue
+
+        # Concatenate with newlines
+        return '\n'.join(tool_infos)
 
     def get_prompt_metadata(self, prompt_name: str) -> Dict[str, Any]:
         """

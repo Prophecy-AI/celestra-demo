@@ -1,5 +1,10 @@
 name: "text_to_sql_med"
 description: "Generate SQL for med_claims table queries"
+
+orchestrator_info: |
+  - text_to_sql_med: Generate SQL over medical claims (Claims.medical_claims). Use for HCP/HCO, diagnosis (condition_label), procedure codes/descriptions, charges, distinct patients/claim counts, states, and date windows. Not for Rx fills/NDCs, provider bios, or provider payments.
+    Parameters: {"request": "natural language description"}
+
 variables:
   - current_date
   - table_name

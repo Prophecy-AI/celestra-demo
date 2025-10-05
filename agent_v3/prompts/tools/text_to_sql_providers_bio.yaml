@@ -1,5 +1,10 @@
 name: "text_to_sql_providers_bio"
 description: "Generate SQL for providers_bio table queries"
+
+orchestrator_info: |
+  - text_to_sql_providers_bio: Generate SQL over provider bios (HCP.providers_bio). Use for specialty, title, certifications, education, awards, memberships, conditions_treated. Not for Rx/medical claims or provider payments.
+    Parameters: {"request": "natural language description"}
+
 variables:
   - table_name
 

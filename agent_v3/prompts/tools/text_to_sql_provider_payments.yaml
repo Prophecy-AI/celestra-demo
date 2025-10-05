@@ -1,5 +1,10 @@
 name: "text_to_sql_provider_payments"
 description: "Generate SQL for provider_payments table queries"
+
+orchestrator_info: |
+  - text_to_sql_provider_payments: Generate SQL over provider payments (HCP.provider_payments). Use for payments to NPIs by payer_company, associated_product, nature_of_payment, product_type, program_year; totals and breakdowns. Not for Rx/medical claims or provider bios.
+    Parameters: {"request": "natural language description"}
+
 variables:
   - table_name
 

@@ -1,5 +1,10 @@
 name: "text_to_sql_rx"
 description: "Generate SQL for rx_claims table queries"
+
+orchestrator_info: |
+  - text_to_sql_rx: Generate SQL over Rx prescriptions (Claims.rx_claims). Use for drug/NDC/prescriber queries, fill dates, quantities, days supply, payer channels, and date windows. Not for diagnoses/procedures, provider bios, or provider payments.
+    Parameters: {"request": "natural language description"}
+
 variables:
   - current_date
   - table_name

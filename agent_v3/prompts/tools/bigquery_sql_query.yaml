@@ -1,0 +1,6 @@
+name: "bigquery_sql_query"
+description: "Execute SQL and get results"
+
+orchestrator_info: |
+  - bigquery_sql_query: Execute SQL and get results
+    Parameters: {"sql": "SQL query", "dataset_name": "descriptive_name"}
