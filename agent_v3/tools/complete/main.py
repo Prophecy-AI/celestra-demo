@@ -3,6 +3,7 @@ Complete tool - Present final results and get feedback
 """
 from typing import Dict, Any
 from agent_v3.tools.base import Tool, ToolResult
+from agent_v3.tools.categories import ToolCategory
 from evals.hallucination_evaluator import evaluate_hallucination
 from evals.answer_evaluator import evaluate_answer_relevancy
 from . import prompts
@@ -14,7 +15,8 @@ class Complete(Tool):
     def __init__(self):
         super().__init__(
             name="complete",
-            description="Present final results and datasets to user"
+            description="Present final results and datasets to user",
+            category=ToolCategory.COMPLETION
         )
 
     @classmethod

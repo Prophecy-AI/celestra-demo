@@ -131,6 +131,12 @@ class Context:
             return self.tool_history[-1].result
         return {}
 
+    def get_last_tool_execution(self) -> Optional[ToolExecution]:
+        """Get the last tool execution record (for hint generation)"""
+        if self.tool_history:
+            return self.tool_history[-1]
+        return None
+
     def has_error(self) -> bool:
         """Check if the last tool execution had an error"""
         if self.tool_history:

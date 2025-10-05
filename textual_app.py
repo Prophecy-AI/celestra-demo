@@ -235,6 +235,16 @@ class ToolsTab(VerticalScroll):
     def compose(self) -> ComposeResult:
         yield Label("💡 Tip: Start with the simplest possible tool and expand later", classes="hint")
         yield Label("⚠️  Important: Only edit prompts here - don't change Python code structure", classes="warning")
+        yield Label(
+            "📋 All tools must have:\n"
+            "  1. category=ToolCategory.X (REQUIRED: SQL_GENERATION, SQL_EXECUTION, COMMUNICATION, COMPLETION, OTHER)\n"
+            "  2. get_orchestrator_info() returning tool description for main prompt\n"
+            "  3. execute(params, context) performing the actual work\n"
+            "  4. get_success_hint(context) if LLM needs guidance after success (optional)\n"
+            "  5. get_error_hint(context) if custom error recovery needed (optional, has default)\n"
+            "  6. Registration in tools/__init__.py get_all_tools()",
+            classes="hint"
+        )
 
         yield Horizontal(
             Select(

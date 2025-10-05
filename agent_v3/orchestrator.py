@@ -7,6 +7,7 @@ from .context import Context
 from .llm_client import LLMClient
 from .tools import get_all_tools
 from .prompts.system_prompt import get_main_system_prompt
+from .prompts import hints
 from .exceptions import ConnectionLostError, ToolExecutionError, MaxRecursionError
 
 
@@ -230,38 +231,32 @@ class RecursiveOrchestrator:
             return self._recursive_loop(depth + 1)
 
     def _add_contextual_hints(self):
-        """Add hints based on the last tool execution"""
-        last_tool = self.context.get_last_tool_name()
+        """
+        Add hints based on the last tool execution.
 
-        if not last_tool:
+        This method is now tool-agnostic - tools provide their own hints
+        via get_success_hint() and get_error_hint() methods.
+        """
+        last_execution = self.context.get_last_tool_execution()
+        if not last_execution:
             # First iteration - no hints needed
             return
 
-        # If last tool was SQL generation, hint to execute it
-        if last_tool in ["text_to_sql_rx", "text_to_sql_med", "text_to_sql_provider_payments", "text_to_sql_providers_bio"]:
-            last_result = self.context.get_last_tool_result()
-            if "sql" in last_result and not self.context.has_error():
-                hint_msg = (
-                    "SQL query has been generated. Use 'bigquery_sql_query' to execute it, "
-                    "or call more tools IF NECESSARY to capture all the context needed from this or other datasets."
-                )
-                self.context.add_system_hint(hint_msg)
-                self.log(f"Added hint: {hint_msg}")
+        # Get the tool instance
+        tool_name = last_execution.tool_name
+        if tool_name not in self.tools:
+            self.log(f"Warning: Tool '{tool_name}' not found for hint generation")
+            return
 
-        # If we have collected some data, hint about completion
-        elif last_tool == "bigquery_sql_query":
-            datasets = self.context.get_all_datasets()
-            if datasets and not self.context.has_error():
-                self.context.add_system_hint(
-                    f"Query executed successfully. You have {len(datasets)} dataset(s). "
-                    "Consider using 'complete' to present results, or continue with more queries if needed."
-                )
-                self.log("Added hint: Consider completion or more queries")
+        tool = self.tools[tool_name]
 
-        # If there was an error, hint to communicate with user
-        if self.context.has_error():
-            self.context.add_system_hint(
-                "The last tool execution had an error. Consider using 'communicate' "
-                "to inform the user or try an alternative approach."
-            )
-            self.log("Added hint: Handle error condition")
+        # Ask the tool for its hint based on success or error
+        if last_execution.error:
+            hint = tool.get_error_hint(self.context)
+        else:
+            hint = tool.get_success_hint(self.context)
+
+        # Add hint if provided
+        if hint:
+            self.context.add_system_hint(hint)
+            self.log(f"Added hint from {tool_name}: {hint}")

@@ -4,10 +4,14 @@ TextToSQLProviderPayments tool - Generate SQL for provider payments data
 import os
 import re
 import anthropic
-from typing import Dict, Any
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from agent_v3.tools.base import Tool, ToolResult
+from agent_v3.tools.categories import ToolCategory
 from agent_v3.tools.logger import tool_log
 from . import prompts
+
+if TYPE_CHECKING:
+    from agent_v3.context import Context
 
 
 class TextToSQLProviderPayments(Tool):
@@ -16,7 +20,8 @@ class TextToSQLProviderPayments(Tool):
     def __init__(self):
         super().__init__(
             name="text_to_sql_provider_payments",
-            description="Convert natural language request to SQL for provider_payments table"
+            description="Convert natural language request to SQL for provider_payments table",
+            category=ToolCategory.SQL_GENERATION
         )
         self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
@@ -112,3 +117,8 @@ class TextToSQLProviderPayments(Tool):
     def _extract_scope(self, sql: str, request: str) -> str:
         """Extract the scope of the query"""
         return "payment data analysis"
+
+    def get_success_hint(self, context: 'Context') -> Optional[str]:
+        """Provide hint after successful SQL generation"""
+        from agent_v3.prompts import hints
+        return hints.get_sql_generated_hint()

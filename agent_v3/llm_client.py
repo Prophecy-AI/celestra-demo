@@ -7,7 +7,8 @@ import re
 from typing import Dict, Any, List, Optional
 import anthropic
 from opentelemetry.instrumentation.anthropic import AnthropicInstrumentor
- 
+from agent_v3.prompts import hints
+
 AnthropicInstrumentor().instrument()
 
 class LLMClient:
@@ -120,9 +121,4 @@ class LLMClient:
 
     def create_force_message(self, available_tools: List[str]) -> str:
         """Create a message that forces the LLM to select a tool"""
-        return (
-            f"You MUST select exactly ONE tool from the following list: {available_tools}\n"
-            f"Respond with ONLY a JSON object in this format:\n"
-            f'{{"tool": "<tool_name>", "parameters": {{"param1": "value1"}}, "reasoning_trace": "Brief explanation of your thinking"}}\n'
-            f"Select the most appropriate tool for the current context."
-        )
+        return hints.get_force_tool_selection_message(available_tools)

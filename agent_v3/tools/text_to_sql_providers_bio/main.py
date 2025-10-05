@@ -4,10 +4,14 @@ TextToSQLProvidersBio tool - Generate SQL for provider biographical data
 import os
 import re
 import anthropic
-from typing import Dict, Any
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from agent_v3.tools.base import Tool, ToolResult
+from agent_v3.tools.categories import ToolCategory
 from agent_v3.tools.logger import tool_log
 from . import prompts
+
+if TYPE_CHECKING:
+    from agent_v3.context import Context
 
 
 class TextToSQLProvidersBio(Tool):
@@ -16,7 +20,8 @@ class TextToSQLProvidersBio(Tool):
     def __init__(self):
         super().__init__(
             name="text_to_sql_providers_bio",
-            description="Convert natural language request to SQL for providers_bio table"
+            description="Convert natural language request to SQL for providers_bio table",
+            category=ToolCategory.SQL_GENERATION
         )
         self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
@@ -145,3 +150,8 @@ class TextToSQLProvidersBio(Tool):
             scope_parts.append("provider biographical data")
 
         return " ".join(scope_parts) if scope_parts else "All relevant data"
+
+    def get_success_hint(self, context: 'Context') -> Optional[str]:
+        """Provide hint after successful SQL generation"""
+        from agent_v3.prompts import hints
+        return hints.get_sql_generated_hint()

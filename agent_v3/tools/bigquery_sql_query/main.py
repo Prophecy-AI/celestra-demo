@@ -4,13 +4,17 @@ BigQuerySQLQuery tool - Execute SQL queries on BigQuery
 import os
 import time
 import polars as pl
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from google.cloud import bigquery
 from google.cloud.exceptions import GoogleCloudError
 from agent_v3.tools.base import Tool, ToolResult
+from agent_v3.tools.categories import ToolCategory
 from agent_v3.tools.logger import tool_log
 from evals.retrieval_evaluator import evaluate_retrieval_relevancy
 from . import prompts
+
+if TYPE_CHECKING:
+    from agent_v3.context import Context
 
 
 class BigQuerySQLQuery(Tool):
@@ -19,7 +23,8 @@ class BigQuerySQLQuery(Tool):
     def __init__(self):
         super().__init__(
             name="bigquery_sql_query",
-            description="Execute SQL query on BigQuery and return results as DataFrame"
+            description="Execute SQL query on BigQuery and return results as DataFrame",
+            category=ToolCategory.SQL_EXECUTION
         )
         self.client = bigquery.Client(project=os.getenv("GCP_PROJECT"))
         self.timeout = 30.0
@@ -195,3 +200,9 @@ class BigQuerySQLQuery(Tool):
         except Exception as e:
             print(f"Warning: Failed to save CSV: {str(e)}")
             return ""
+
+    def get_success_hint(self, context: 'Context') -> Optional[str]:
+        """Provide context-aware hint after successful SQL execution"""
+        from agent_v3.prompts import hints
+        datasets = context.get_all_datasets()
+        return hints.get_query_executed_hint(len(datasets))

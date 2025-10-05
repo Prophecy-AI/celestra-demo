@@ -3,6 +3,7 @@ Communicate tool - Ask user for clarification or provide updates
 """
 from typing import Dict, Any
 from agent_v3.tools.base import Tool, ToolResult
+from agent_v3.tools.categories import ToolCategory
 from . import prompts
 
 
@@ -12,7 +13,8 @@ class Communicate(Tool):
     def __init__(self):
         super().__init__(
             name="communicate",
-            description="Ask user for clarification or provide intermediate updates"
+            description="Ask user for clarification or provide intermediate updates",
+            category=ToolCategory.COMMUNICATION
         )
 
     @classmethod
