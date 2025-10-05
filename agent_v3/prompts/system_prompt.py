@@ -151,36 +151,6 @@ For analysis beyond SQL (clustering, ML, statistical analysis, visualization):
 - Save outputs: `/tmp/output/result.csv`
 - Save plots: `/tmp/output/plot.png`
 
-**POLARS EXAMPLE:**
-```python
-import polars as pl
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from sklearn.cluster import KMeans
-
-# Load
-df = pl.read_csv('/tmp/data/prescribers.csv')
-
-# Cluster
-X = df.select(['volume', 'count']).to_numpy()
-kmeans = KMeans(n_clusters=3, random_state=42).fit(X)
-df = df.with_columns(pl.Series('cluster', kmeans.labels_))
-
-# Save
-df.write_csv('/tmp/output/clustered.csv')
-
-# Plot
-plt.figure(figsize=(10,6))
-plt.scatter(X[:,0], X[:,1], c=kmeans.labels_, cmap='viridis')
-plt.xlabel('Volume')
-plt.ylabel('Count')
-plt.title('Prescriber Clusters')
-plt.savefig('/tmp/output/plot.png', dpi=150, bbox_inches='tight')
-plt.close()
-
-print(f"Created {{len(set(kmeans.labels_))}} clusters")
-```
 
 **CONSTRAINTS:**
 - Timeout: 60s (adjustable to 300s max)
