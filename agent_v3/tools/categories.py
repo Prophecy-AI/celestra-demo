@@ -15,4 +15,6 @@ class ToolCategory(Enum):
     SQL_EXECUTION = "sql_execution"    # Tools that execute SQL queries
     COMMUNICATION = "communication"     # Tools that interact with user
     COMPLETION = "completion"           # Tools that finalize the session
+    CODE_EXECUTION = "code_execution"   # Tools that execute code in sandbox
+    FILE_MANAGEMENT = "file_management" # Tools that manage sandbox files
     OTHER = "other"                     # Catch-all for tools without specific hints

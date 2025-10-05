@@ -9,6 +9,9 @@ from .text_to_sql_providers_bio import TextToSQLProvidersBio
 from .bigquery_sql_query import BigQuerySQLQuery
 from .communicate import Communicate
 from .complete import Complete
+from .code_execution.sandbox_exec import SandboxExec
+from .code_execution.sandbox_write_file import SandboxWriteFile
+from .code_execution.sandbox_edit_file import SandboxEditFile
 
 
 def get_all_tools():
@@ -21,6 +24,9 @@ def get_all_tools():
         "bigquery_sql_query": BigQuerySQLQuery(),
         "communicate": Communicate(),
         "complete": Complete(),
+        "sandbox_exec": SandboxExec(),
+        "sandbox_write_file": SandboxWriteFile(),
+        "sandbox_edit_file": SandboxEditFile(),
     }
 
 
@@ -32,6 +38,9 @@ __all__ = [
     "BigQuerySQLQuery",
     "Communicate",
     "Complete",
+    "SandboxExec",
+    "SandboxWriteFile",
+    "SandboxEditFile",
     "Tool",
     "ToolResult",
     "get_all_tools"
