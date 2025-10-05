@@ -24,6 +24,20 @@ class Tool(ABC):
         self.name = name
         self.description = description
 
+    @classmethod
+    @abstractmethod
+    def get_orchestrator_info(cls) -> str:
+        """Return tool description for orchestrator system prompt"""
+        pass
+
+    @classmethod
+    def get_system_prompt(cls, **variables) -> Optional[str]:
+        """
+        Return system prompt for LLM-based tools.
+        Non-LLM tools (like bigquery_sql_query) should return None.
+        """
+        return None
+
     @abstractmethod
     def execute(self, parameters: Dict[str, Any], context: Any) -> ToolResult:
         """Execute the tool with given parameters"""
