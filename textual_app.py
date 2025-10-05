@@ -468,6 +468,25 @@ class AgentToolManager(App):
             self.load_main_prompt()
             self.load_history()
 
+    def on_unmount(self) -> None:
+        """Cleanup on app exit - checkout to original branch if still in staging"""
+        # Kill agent process if still running
+        if self.agent_process:
+            try:
+                self.agent_process.terminate()
+                self.agent_process.wait(timeout=2)
+            except:
+                pass
+
+        # Checkout to original branch if still in staging
+        current = get_current_branch()
+        if current and current.startswith('staging-'):
+            # User killed the app without using quit modal
+            # Checkout to original branch but keep staging branch for safety
+            original = get_original_branch(current)
+            run_git(['git', 'checkout', original])
+            # Don't delete staging branch - user might want to come back to it
+
     def compose(self) -> ComposeResult:
         """Compose app layout"""
         yield Header()
