@@ -246,6 +246,11 @@ class ToolsTab(VerticalScroll):
             classes="tool-controls",
         )
 
+        yield Label(
+            "⌨️  Editor shortcuts: Ctrl+Z (undo), Ctrl+Y (redo), Ctrl+A (select all), Ctrl+C/V (copy/paste)",
+            classes="hint-small"
+        )
+
         yield TextArea(
             "",
             language="python",
@@ -258,6 +263,12 @@ class ToolsTab(VerticalScroll):
             Label("💡 Tip: Save often when you find something good", classes="hint-inline"),
             Button("Delete Tool", id="delete-tool", variant="error"),
             classes="action-bar",
+        )
+
+        yield Label(
+            "💡 Advanced: You can also edit tool files directly in agent_v3/tools/{tool_name}/prompts.py",
+            classes="hint-small",
+            id="direct-edit-hint"
         )
 
 
@@ -370,6 +381,12 @@ class AgentToolManager(App):
         margin: 1 0;
     }
 
+    .hint-small {
+        color: $accent;
+        margin: 0 0;
+        text-style: dim;
+    }
+
     .warning {
         color: $warning;
         margin: 1 0;
@@ -415,7 +432,7 @@ class AgentToolManager(App):
     """
 
     BINDINGS = [
-        Binding("q", "quit", "Quit"),
+        Binding("ctrl+q", "quit", "Quit"),
         Binding("ctrl+s", "save", "Save"),
         Binding("ctrl+n", "new_tool", "New Tool"),
     ]
@@ -640,6 +657,13 @@ class AgentToolManager(App):
 
         editor = self.query_one("#tool-editor", TextArea)
         editor.text = content
+
+        # Update the direct edit hint with actual file path
+        try:
+            hint = self.query_one("#direct-edit-hint", Label)
+            hint.update(f"💡 Advanced: You can also edit this file directly at {prompts_file}")
+        except:
+            pass
 
         self.notify(f"Loaded {tool_name}")
 
