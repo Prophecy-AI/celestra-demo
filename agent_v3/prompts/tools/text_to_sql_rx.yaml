@@ -1,8 +1,5 @@
 name: "text_to_sql_rx"
 description: "Generate SQL for rx_claims table queries"
-model: "claude-sonnet-4-20250514"
-temperature: 0
-max_tokens: 2048
 variables:
   - current_date
   - table_name

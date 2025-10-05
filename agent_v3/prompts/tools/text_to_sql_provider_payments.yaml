@@ -1,8 +1,5 @@
 name: "text_to_sql_provider_payments"
 description: "Generate SQL for provider_payments table queries"
-model: "claude-sonnet-4-20250514"
-temperature: 0
-max_tokens: 2048
 variables:
   - table_name
 

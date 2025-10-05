@@ -233,9 +233,6 @@ class {class_name}(Tool):
 
         prompt = f'''name: "{tool_name}"
 description: "{description}"
-model: "claude-sonnet-4-20250514"
-temperature: 0
-max_tokens: 2048
 {variables_section}
 system_prompt: |
   You are a BigQuery Standard SQL generator for {description}.
