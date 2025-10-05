@@ -308,6 +308,30 @@ class MainPromptTab(VerticalScroll):
         )
 
 
+class HintsTab(VerticalScroll):
+    """System hints editor tab"""
+
+    def compose(self) -> ComposeResult:
+        yield Label("💡 All hint text centralized here - tools reference these prompts", classes="hint")
+        yield Label(
+            "⚠️  Important: Keep hints actionable and specific. Tools call these functions to guide the LLM.",
+            classes="warning"
+        )
+
+        yield TextArea(
+            "",
+            language="python",
+            id="hints-editor",
+            show_line_numbers=True,
+        )
+
+        yield Horizontal(
+            Button("💾 Save (Ctrl+S)", id="save-hints", variant="primary"),
+            Label("💡 Tip: Test hints by running agent after changes", classes="hint-inline"),
+            classes="action-bar",
+        )
+
+
 class TestAgentTab(VerticalScroll):
     """Test agent with embedded terminal"""
 
@@ -469,6 +493,7 @@ class AgentToolManager(App):
             self.push_screen(CreateStagingModal(), self.on_staging_created)
         else:
             self.load_main_prompt()
+            self.load_hints()
             self.load_history()
 
     def on_staging_created(self, created: bool) -> None:
@@ -476,6 +501,7 @@ class AgentToolManager(App):
         if created:
             self.refresh_branch_bar()
             self.load_main_prompt()
+            self.load_hints()
             self.load_history()
 
     def on_unmount(self) -> None:
@@ -519,6 +545,8 @@ class AgentToolManager(App):
                 yield ToolsTab()
             with TabPane("📋 Main Prompt"):
                 yield MainPromptTab()
+            with TabPane("💬 Hints"):
+                yield HintsTab()
             with TabPane("🚀 Test Agent"):
                 yield TestAgentTab()
             with TabPane("📜 History"):
@@ -550,6 +578,8 @@ class AgentToolManager(App):
             self.delete_tool()
         elif event.button.id == "save-main":
             self.save_main_prompt()
+        elif event.button.id == "save-hints":
+            self.save_hints()
         elif event.button.id == "run-agent":
             self.run_agent()
         elif event.button.id == "stop-agent":
@@ -598,6 +628,12 @@ class AgentToolManager(App):
         try:
             if self.query_one("#main-editor", TextArea):
                 self.save_main_prompt()
+        except:
+            pass
+
+        try:
+            if self.query_one("#hints-editor", TextArea):
+                self.save_hints()
         except:
             pass
 
@@ -853,6 +889,32 @@ class {class_name}(Tool):
             run_git(['git', 'add', system_prompt_file])
             run_git(['git', 'commit', '-m', 'Update main orchestrator prompt'])
             self.notify("Saved and committed main prompt", severity="information")
+        else:
+            self.notify(f"Error saving: {error}", severity="error")
+
+    def load_hints(self) -> None:
+        """Load hints prompts"""
+        hints_file = "agent_v3/prompts/hints.py"
+        content = read_file(hints_file)
+
+        try:
+            editor = self.query_one("#hints-editor", TextArea)
+            editor.text = content
+        except:
+            pass  # Editor not ready yet
+
+    def save_hints(self) -> None:
+        """Save hints prompts"""
+        editor = self.query_one("#hints-editor", TextArea)
+        content = editor.text
+
+        hints_file = "agent_v3/prompts/hints.py"
+        success, error = write_file(hints_file, content)
+
+        if success:
+            run_git(['git', 'add', hints_file])
+            run_git(['git', 'commit', '-m', 'Update system hints'])
+            self.notify("Saved and committed hints", severity="information")
         else:
             self.notify(f"Error saving: {error}", severity="error")
 
