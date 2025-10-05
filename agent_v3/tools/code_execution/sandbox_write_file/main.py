@@ -114,7 +114,8 @@ class SandboxWriteFile(Tool):
             # Create sandbox
             sandbox = modal.Sandbox.create(
                 image=image,
-                timeout=60,
+                timeout=24 * 60 * 60, # 24 hours
+                idle_timeout=60, # 60 seconds
                 block_network=True,
                 app=app
             )

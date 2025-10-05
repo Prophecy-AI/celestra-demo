@@ -95,6 +95,13 @@ class RecursiveOrchestrator:
         # Add hints based on last tool execution
         self._add_contextual_hints()
 
+        # Add single-tool enforcement reminder after every tool execution
+        if self.context.get_last_tool_execution():
+            self.context.add_system_hint(
+                "REMINDER: Output EXACTLY ONE tool call in <TOOL-CALL></TOOL-CALL> tags. "
+                "Multiple tool calls will be REJECTED."
+            )
+
         # Try to get tool selection from LLM
         max_force_attempts = 3
         force_attempts = 0

@@ -114,6 +114,10 @@ class SandboxExec(Tool):
         """Get existing sandbox or create new one"""
         if context.sandbox:
             tool_log("sandbox_exec", "Using existing sandbox")
+            # FIX: Check if CSVs need mounting even for existing sandbox
+            if not context.sandbox_mounted and context.csv_paths:
+                tool_log("sandbox_exec", "Unmounted CSVs detected, mounting now...")
+                self._mount_csvs(context.sandbox, context)
             return context.sandbox
 
         tool_log("sandbox_exec", "Creating new sandbox...")
@@ -121,19 +125,27 @@ class SandboxExec(Tool):
         # Get or create Modal app
         app = modal.App.lookup("agent-sandbox", create_if_missing=True)
 
-        # Create sandbox image
+        # Create sandbox image with comprehensive data science packages
         image = modal.Image.debian_slim(python_version="3.11").pip_install(
             "polars",
+            "pyarrow",  # Required for polars-pandas interop
+            "pandas",
             "numpy",
             "matplotlib",
             "seaborn",
-            "scikit-learn"
+            "plotly",
+            "scikit-learn",
+            "scipy",
+            "statsmodels",
+            "openpyxl",  # Excel support
+            "xlrd"  # Excel support
         )
 
         # Create sandbox
         sandbox = modal.Sandbox.create(
             image=image,
-            timeout=timeout,
+            timeout=24 * 60 * 60, # 24 hours
+            idle_timeout=60, # 60 seconds
             block_network=True,
             app=app
         )
@@ -142,8 +154,8 @@ class SandboxExec(Tool):
         context.sandbox = sandbox
         tool_log("sandbox_exec", f"Sandbox created: {sandbox.object_id}")
 
-        # Mount CSVs if not already done
-        if not context.sandbox_mounted:
+        # Mount all existing CSVs (batch mount on creation)
+        if not context.sandbox_mounted and context.csv_paths:
             self._mount_csvs(sandbox, context)
 
         return sandbox

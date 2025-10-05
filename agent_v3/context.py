@@ -104,6 +104,14 @@ class Context:
         self.queries[name] = sql
         self.csv_paths[name] = csv_path
 
+        # IMPORTANT: Mount immediately if sandbox exists
+        if self.sandbox:
+            from agent_v3.tools.code_execution.csv_mount_utils import mount_single_csv
+            try:
+                mount_single_csv(self.sandbox, name, csv_path, self)
+            except Exception as e:
+                print(f"Warning: Failed to mount CSV to sandbox: {e}")
+
     def get_dataframe(self, name: str) -> Optional[pl.DataFrame]:
         """Retrieve stored DataFrame"""
         return self.dataframes.get(name)

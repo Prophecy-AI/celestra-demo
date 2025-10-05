@@ -340,6 +340,101 @@ class ToolCategory(Enum):
 
 ---
 
+## Research Methodology & Reasoning Checkpoints
+
+**Problem**: LLMs hallucinate when they act before thinking - executing non-existent files, guessing column names, skipping validation.
+
+**Solution**: `<think></think>` blocks force internal reasoning before each tool call.
+
+### The Pattern
+
+```json
+<think>
+Wait - does this file exist yet?
+Did I create it in a previous step, or am I hallucinating?
+Let me verify my assumptions before acting.
+</think>
+
+{"tool": "sandbox_exec", "parameters": {...}, "reasoning_trace": "..."}
+```
+
+### How It Prevents Hallucinations
+
+**Without <think> blocks:**
+```
+User: "Cluster the HUMIRA data"
+LLM: {"tool": "sandbox_exec", "command": ["python", "/tmp/cluster.py"]}
+→ Error: File doesn't exist (hallucinated execution)
+```
+
+**With <think> blocks:**
+```
+User: "Cluster the HUMIRA data"
+
+<think>
+Wait - I need to create /tmp/cluster.py first.
+File doesn't exist yet. Write it first, THEN execute.
+</think>
+
+{"tool": "sandbox_write_file", "file_path": "/tmp/cluster.py", ...}
+→ Success: File created
+
+[Next iteration]
+<think>
+File exists now (I created it last step). Safe to execute.
+</think>
+
+{"tool": "sandbox_exec", "command": ["python", "/tmp/cluster.py"]}
+→ Success: Executed properly
+```
+
+### Research Mindset Principles
+
+The system prompt teaches the orchestrator to think like a data scientist researcher:
+
+1. **Explore Before Analyzing**
+   - Check data distribution before choosing k-means parameters
+   - Inspect schema before writing code to avoid KeyError
+   - Use quick commands (`df.describe()`) before complex analysis
+
+2. **Question Everything**
+   - "Did I verify column names or am I guessing?"
+   - "Does this file exist or am I hallucinating?"
+   - "Am I 100% confident or should I validate first?"
+
+3. **Iterate Until Certain**
+   - Start simple (k=3), evaluate, adjust (k=4), validate
+   - Test minimal code first, then build complexity
+   - Don't present results until 100% confident
+
+4. **Debug Like a Scientist**
+   - Error = inspect root cause, not guess-and-fix
+   - Test hypothesis with minimal reproducible code
+   - Verify fix works before continuing
+
+5. **Validate Obsessively**
+   - Sanity check: do cluster sizes make sense?
+   - Cross-reference: does this align with source data?
+   - Edge cases: what about 1-prescription providers?
+
+### Example Workflow With <think> Blocks
+
+See "RESEARCH WORKFLOW EXAMPLES" in system prompt for full examples showing:
+- **SQL Workflow** - Standard path (no <think> needed for simple cases)
+- **Clustering Workflow** - 7 iterations with <think> blocks showing exploration → iteration → validation
+- **Debugging Workflow** - Error recovery with <think> blocks catching assumptions
+
+### Implementation Notes
+
+- **<think> is optional** - Simple SQL queries don't need it
+- **Parsing**: LLM client already handles text before JSON (tested)
+- **<think> vs reasoning_trace**:
+  - `<think>` = Internal reasoning, catches bad assumptions
+  - `reasoning_trace` = User-facing progress update
+- **Guidelines added**: Prompts explicitly encourage <think> usage for sandbox operations
+
+---
+
 ## System Prompt Integration
 
 Add to `prompts/system_prompt.py`:
@@ -406,21 +501,27 @@ print(f"Created {len(set(kmeans.labels_))} clusters")
 
 ---
 
-## Hints
+## Hints (Non-Prescriptive)
+
+**Philosophy**: Hints suggest options, not commands. Preserve LLM agency to explore solutions.
 
 ### `sandbox_exec`
-- **Success + files**: "Code executed successfully. {N} output files created. Consider using 'complete' to present results."
-- **Success + no files**: "Code executed but no outputs in /tmp/output/. Verify script saves results."
-- **Exit ≠ 0**: "Execution failed. Review stderr and use sandbox_edit_file to fix errors."
+- **Success + files**: "Code executed successfully. Output files: {list}. Explore results or communicate findings to user."
+- **Success + no files**: "Code executed successfully but no outputs in /tmp/output/. Consider asking user if results should be saved."
+- **Exit ≠ 0**: "Execution failed. Review stderr to understand the issue. Consider asking user for clarification if error is unclear."
 
 ### `sandbox_write_file`
-- **Success**: "File written successfully. Use sandbox_exec to run it."
-- **Path error**: "Invalid path. Use /tmp/ or /workspace/ only."
+- **Success**: "File written: {path}. {N} dataset(s) available in /tmp/data/. Consider exploring data or asking user for clarification if approach is unclear."
+- **Path error**: Invalid path error returned, no hint (error is self-explanatory)
 
 ### `sandbox_edit_file`
-- **Success**: "File edited successfully. Re-run with sandbox_exec."
-- **Not unique**: "Edit failed - old_string not unique. Include more surrounding context."
-- **Not found**: "Edit failed - old_string not found. Read file first with sandbox_exec."
+- **Success**: "File edited: {path}. Explore results or communicate with user about next steps."
+- **Not unique**: "Edit failed - old_string appeared multiple times. Consider viewing the file to identify unique context, or ask user for clarification."
+- **Not found**: "Edit failed - old_string not found. Consider viewing file contents or asking user to verify the expected content."
+
+**Key difference from prescriptive hints**:
+- ❌ Old: "Use sandbox_exec to run it" (directive)
+- ✅ New: "Consider exploring data or asking user for clarification" (suggestive)
 
 ---
 

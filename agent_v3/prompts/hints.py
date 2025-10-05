@@ -12,8 +12,10 @@ def get_force_tool_selection_message(available_tools: List[str]) -> str:
     """
     return (
         f"You MUST select exactly ONE tool from the following list: {available_tools}\n"
-        f"Respond with ONLY a JSON object in this format:\n"
-        f'{{"tool": "<tool_name>", "parameters": {{"param1": "value1"}}, "reasoning_trace": "Brief explanation of your thinking"}}\n'
+        f"Wrap your tool call in <TOOL-CALL></TOOL-CALL> tags:\n"
+        f"<TOOL-CALL>\n"
+        f'{{"tool": "<tool_name>", "parameters": {{"param1": "value1"}}, "reasoning_trace": "Brief explanation"}}\n'
+        f"</TOOL-CALL>\n"
         f"Select the most appropriate tool for the current context."
     )
 
