@@ -1,6 +1,4 @@
 name: "complete"
+path: "agent_v3.tools.complete.Complete"
+enabled: true
 description: "Present final results to user"
-
-orchestrator_info: |
-  - complete: Present final results to user
-    Parameters: {"summary": "brief conversational summary (2-3 sentences max)", "datasets": ["dataset1", "dataset2"]}

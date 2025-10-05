@@ -1,6 +1,4 @@
 name: "communicate"
+path: "agent_v3.tools.communicate.Communicate"
+enabled: true
 description: "Ask user for clarification"
-
-orchestrator_info: |
-  - communicate: Ask user for clarification
-    Parameters: {"message": "question or update for user (use markdown formatting when appropriate)"}
