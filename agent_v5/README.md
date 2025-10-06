@@ -165,8 +165,59 @@ You: Create a file called test.txt with "Hello World"
 ⏳ Processing...
 
 Agent:
-[Tool: Write]
-I've created the file test.txt with "Hello World"
+--------------------------------------------------------------------------------
+I'll create that file for you.
+
+🔧 [Tool: Write]
+📥 Input: {
+  "file_path": "test.txt",
+  "content": "Hello World"
+}
+📤 Output:
+File created successfully at: ./workspace/abc-123/test.txt
+----------------------------------------
+
+Done! I've created the file test.txt with "Hello World".
+--------------------------------------------------------------------------------
+
+You: Query BigQuery for top 5 HUMIRA prescribers in CA and save to humira.csv
+⏳ Processing...
+
+Agent:
+--------------------------------------------------------------------------------
+I'll query the BigQuery database for the top HUMIRA prescribers in California.
+
+🔧 [Tool: mcp__bigquery__bigquery_query]
+📥 Input: {
+  "sql": "SELECT PRESCRIBER_NPI_NBR, COUNT(*) as rx_count FROM `unique-bonbon-472921-q8.Claims.rx_claims` WHERE NDC_DRUG_NM = 'HUMIRA' AND PRESCRIBER_NPI_STATE_CD = 'CA' GROUP BY PRESCRIBER_NPI_NBR ORDER BY rx_count DESC LIMIT 5",
+  "dataset_name": "humira"
+}
+📤 Output:
+Saved 5 rows to humira.csv
+
+     PRESCRIBER_NPI_NBR  rx_count
+0        1234567890          150
+1        0987654321          120
+2        1111111111          100
+...
+----------------------------------------
+
+Great! I've saved the results to humira.csv. Let me read it back to confirm.
+
+🔧 [Tool: Read]
+📥 Input: {
+  "file_path": "humira.csv"
+}
+📤 Output:
+     1→PRESCRIBER_NPI_NBR,rx_count
+     2→1234567890,150
+     3→0987654321,120
+     4→1111111111,100
+...
+----------------------------------------
+
+Perfect! The top 5 HUMIRA prescribers in California have been saved to humira.csv.
+--------------------------------------------------------------------------------
 ```
 
 **Local CLI vs Modal:**

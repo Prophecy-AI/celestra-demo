@@ -110,10 +110,12 @@ async def main():
             df.write_csv(str(csv_path))
 
             preview = str(df.head(10))
+            dataset_name = args['dataset_name']
+            csv_path = str((workspace_dir / f'{dataset_name}.csv').absolute())
             return {
                 "content": [{
                     "type": "text",
-                    "text": f"Saved {df.shape[0]:,} rows to {args['dataset_name']}.csv\n\n{preview}"
+                    "text": f"Saved {df.shape[0]:,} rows to {csv_path}\n\n{preview}"
                 }]
             }
 
@@ -159,10 +161,16 @@ async def main():
             print("-" * 80)
 
             async for message in agent.run(user_input):
+                #print("+" * 40, flush=True)
+                #print(message, flush=True)
+                #print("+" * 40, flush=True)
                 if message.get("type") == "text_delta":
                     print(message["text"], end="", flush=True)
                 elif message.get("type") == "tool_execution":
-                    print(f"\n\n[Tool: {message['tool_name']}]", flush=True)
+                    print(f"\n\n🔧 [Tool: {message['tool_name']}]", flush=True)
+                    #print(f"📥 Input: {json.dumps(message['tool_input'], indent=2)}", flush=True)
+                    #print(f"📤 Output:\n{message['tool_output']}", flush=True)
+                    #print("-" * 40, flush=True)
 
             print("\n" + "-" * 80)
             print()
