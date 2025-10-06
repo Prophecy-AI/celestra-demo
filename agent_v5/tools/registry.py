@@ -3,6 +3,7 @@ Tool registry for managing and executing tools
 """
 from typing import Dict, List
 from .base import BaseTool
+from debug import log
 
 
 class ToolRegistry:
@@ -66,21 +67,15 @@ class ToolRegistry:
                 "is_error": True
             }
 
-        print("tool-execution-debug================")
-        print("tool-name=", tool_name, flush=True)
-        print("tool-input=", tool_input, flush=True)
+        log(f"→ {tool_name}({list(tool_input.keys())})")
 
         # Run prehook for validation/normalization
         try:
             await self.tools[tool_name].prehook(tool_input)
         except Exception as e:
-            # Prehook validation failed
-            return {
-                "content": str(e),
-                "is_error": True
-            }
+            log(f"✗ {tool_name} prehook: {e}", 2)
+            return {"content": str(e), "is_error": True}
 
         result = await self.tools[tool_name].execute(tool_input)
-        print("tool-result=", result, flush=True)
-        print("end-of-tool-execution==============", flush=True)
+        log(f"✓ {tool_name}" if not result.get("is_error") else f"✗ {tool_name}", 1 if not result.get("is_error") else 2)
         return result

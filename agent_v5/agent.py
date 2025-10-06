@@ -5,6 +5,7 @@ import os
 from typing import List, Dict, AsyncGenerator
 from anthropic import Anthropic
 from agent_v5.tools.registry import ToolRegistry
+from debug import log
 from agent_v5.tools.bash import BashTool
 from agent_v5.tools.read import ReadTool
 from agent_v5.tools.write import WriteTool
@@ -38,6 +39,8 @@ class ResearchAgent:
 
     async def run(self, user_message: str) -> AsyncGenerator[Dict, None]:
         """Main agentic loop"""
+        log(f"→ Agent.run(session={self.session_id})")
+
         self.conversation_history.append({
             "role": "user",
             "content": user_message
@@ -46,6 +49,8 @@ class ResearchAgent:
         while True:
             response_content = []
             tool_uses = []
+
+            log(f"→ API call (turn {len(self.conversation_history)//2})")
 
             with self.anthropic_client.messages.stream(
                 model="claude-sonnet-4-5-20250929",
@@ -81,7 +86,10 @@ class ResearchAgent:
             })
 
             if not tool_uses:
+                log("✓ Agent.run complete", 1)
                 break
+
+            log(f"→ Executing {len(tool_uses)} tools")
 
             tool_results = []
             for tool_use in tool_uses:
