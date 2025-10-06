@@ -56,7 +56,7 @@ def create_bigquery_tool(
         tool_name="bigquery_query",
         tool_fn=bigquery_query_tool,
         mcp_schema={
-            "description": "Execute SQL on BigQuery rx_claims table and save results to workspace",
+            "description": "Execute SQL on BigQuery tables (rx_claims, medical_claims, provider_payments, providers_bio) and save results to workspace",
             "inputSchema": {
                 "type": "object",
                 "properties": {
