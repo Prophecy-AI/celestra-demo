@@ -87,6 +87,11 @@ Current date: 2025-10-06"""
 async def main():
     load_dotenv()
 
+    # Setup observability (only active if env vars set)
+    from observability import otel, langfuse_client
+    otel.setup()
+    langfuse_client.setup()
+
     GCP_PROJECT = os.getenv("GCP_PROJECT")
     GCP_CREDENTIALS_JSON = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")

@@ -22,11 +22,16 @@ image = (
         "numpy",
         "seaborn",
         "matplotlib",
-        "scikit-learn"
+        "scikit-learn",
+        "opentelemetry-api",
+        "opentelemetry-sdk",
+        "opentelemetry-instrumentation-anthropic",
+        "langfuse"
     )
     .add_local_python_source("agent_v5")
     .add_local_python_source("bigquery_tool")
     .add_local_python_source("security")
+    .add_local_python_source("observability")
 )
 
 workspace_volume = modal.Volume.from_name("agent-workspaces", version=2, create_if_missing=True)
@@ -112,6 +117,11 @@ async def agent_turn(
     from agent_v5.agent import ResearchAgent
     from bigquery_tool import create_bigquery_tool
     from security import create_path_validation_prehook
+    from observability import otel, langfuse_client
+
+    # Setup observability (only active if env vars set)
+    otel.setup()
+    langfuse_client.setup()
 
     creds_dict = json.loads(gcp_credentials_json)
     gcp_credentials = service_account.Credentials.from_service_account_info(creds_dict)
@@ -145,6 +155,58 @@ async def agent_turn(
         yield message
 
     workspace_volume.commit()
+
+
+@app.function(
+    image=image,
+    volumes={"/workspace": workspace_volume},
+    timeout=60,
+)
+def list_session_files(session_id: str) -> Dict:
+    """List all files in a session directory"""
+    session_dir = Path(f"/workspace/{session_id}")
+
+    if not session_dir.exists():
+        return {"error": f"Session {session_id} not found"}
+
+    files = []
+    for path in session_dir.rglob("*"):
+        if path.is_file():
+            rel_path = path.relative_to(session_dir)
+            files.append({
+                "path": str(rel_path),
+                "size": path.stat().st_size,
+                "modified": path.stat().st_mtime
+            })
+
+    return {"session_id": session_id, "files": files}
+
+
+@app.function(
+    image=image,
+    volumes={"/workspace": workspace_volume},
+    timeout=60,
+)
+def download_file(session_id: str, file_path: str) -> Dict:
+    """Download a specific file from session directory"""
+    session_dir = Path(f"/workspace/{session_id}")
+    target_file = session_dir / file_path
+
+    if not target_file.exists() or not target_file.is_file():
+        return {"error": f"File not found: {file_path}"}
+
+    # Ensure file is within session directory (security check)
+    if not str(target_file.resolve()).startswith(str(session_dir.resolve())):
+        return {"error": "Access denied: file outside session directory"}
+
+    content = target_file.read_bytes()
+
+    return {
+        "session_id": session_id,
+        "file_path": file_path,
+        "content": content,
+        "size": len(content)
+    }
 
 
 @app.local_entrypoint()
