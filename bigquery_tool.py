@@ -7,7 +7,7 @@ from pathlib import Path
 from google.cloud import bigquery
 from google.oauth2.service_account import Credentials
 
-from .mcp_proxy import MCPToolProxy
+from agent_v5.tools.mcp_proxy import MCPToolProxy
 
 
 def create_bigquery_tool(
