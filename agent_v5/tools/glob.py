@@ -57,7 +57,8 @@ class GlobTool(BaseTool):
 
             return {
                 "content": "\n".join(matches),
-                "is_error": False
+                "is_error": False,
+                "debug_summary": f"Found {len(matches)} files, first 5: {matches[:5]}"
             }
 
         except Exception as e:

@@ -126,12 +126,13 @@ class GrepTool(BaseTool):
             if process.returncode == 1:
                 return {
                     "content": "No matches found",
-                    "is_error": False
+                    "is_error": False,
+                    "debug_summary": "No matches found"
                 }
             elif process.returncode != 0:
                 return {
                     "content": stderr.decode(),
-                    "is_error": True
+                    "is_error": True,
                 }
 
             output = stdout.decode()
@@ -142,7 +143,8 @@ class GrepTool(BaseTool):
 
             return {
                 "content": output,
-                "is_error": False
+                "is_error": False,
+                "debug_summary": f"Found {len(output.split('\n'))} matches"
             }
 
         except FileNotFoundError:
