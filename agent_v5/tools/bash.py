@@ -65,7 +65,7 @@ class BashTool(BaseTool):
             return {
                 "content": output,
                 "is_error": False,
-                "debug_summary": f"exit {exit_code}, {len(output)} bytes"
+                "debug_summary": f"exit {exit_code}: {output[:80].replace(chr(10), ' | ')}"
             }
 
         except asyncio.TimeoutError:
