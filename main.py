@@ -3,14 +3,11 @@ agent_v5: Modal sandbox function with ResearchAgent (no Claude Code SDK dependen
 """
 import modal
 from typing import AsyncGenerator, Dict
-from agent_v5.agent import ResearchAgent
-from bigquery_tool import create_bigquery_tool
 import json
 from pathlib import Path
 from google.oauth2 import service_account
 import os
 import uuid
-from dotenv import load_dotenv
 
 app = modal.App("agent-v5")
 
@@ -23,10 +20,12 @@ image = (
         "polars",
         "pyarrow",
         "numpy",
+        "seaborn",
         "matplotlib",
         "scikit-learn"
     )
     .add_local_python_source("agent_v5")
+    .add_local_python_source("bigquery_tool")
 )
 
 workspace_volume = modal.Volume.from_name("agent-workspaces", version=2, create_if_missing=True)
@@ -80,6 +79,8 @@ async def agent_turn(
     gcp_project: str,
     gcp_credentials_json: str
 ) -> AsyncGenerator[Dict, None]:
+    from agent_v5.agent import ResearchAgent
+    from bigquery_tool import create_bigquery_tool
 
     creds_dict = json.loads(gcp_credentials_json)
     gcp_credentials = service_account.Credentials.from_service_account_info(creds_dict)
@@ -109,7 +110,7 @@ async def agent_turn(
 
 @app.local_entrypoint()
 def chat():
-
+    from dotenv import load_dotenv
     load_dotenv()
 
     GCP_PROJECT = os.getenv("GCP_PROJECT")
