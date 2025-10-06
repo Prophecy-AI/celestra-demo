@@ -70,7 +70,7 @@ class ToolRegistry:
         # Smart input logging - show primary param
         primary = next(iter(tool_input.values())) if tool_input else ""
         if isinstance(primary, str):
-            primary = primary.replace("\n", "\\n")[:60]
+            primary = primary.replace("\n", "\\n")
         log(f"→ {tool_name}({primary})")
 
         # Run prehook for validation/normalization
@@ -84,7 +84,7 @@ class ToolRegistry:
 
         # Smart result logging - use debug_summary if provided, else fallback
         if result.get("is_error"):
-            log(f"✗ {tool_name}: {str(result['content'])[:80]}", 2)
+            log(f"✗ {tool_name}: {str(result['content'])}", 2)
         else:
             summary = result.get("debug_summary") or f"ok"
             log(f"✓ {tool_name} {summary}", 1)

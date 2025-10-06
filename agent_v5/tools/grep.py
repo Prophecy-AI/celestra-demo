@@ -144,7 +144,7 @@ class GrepTool(BaseTool):
             return {
                 "content": output,
                 "is_error": False,
-                "debug_summary": f"Found {len(output.split(chr(10)))} matches" # cannot do \n because f-string
+                "debug_summary": f"Found {len(output.split(chr(10)))} matches; listing all matches: {output}" # cannot do \n because f-string
             }
 
         except FileNotFoundError:
