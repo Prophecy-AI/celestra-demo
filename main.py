@@ -228,7 +228,7 @@ def chat():
     print("=" * 80)
     print(f"Session: {session_id}")
     print(f"Workspace: /workspace/{session_id}/ (persists across messages)")
-    print("Type 'exit' to quit")
+    print("Type 'exit' to quit, '/download' to download all files")
     print("=" * 80)
     print()
 
@@ -242,6 +242,52 @@ def chat():
             if user_input.lower() in ['exit', 'quit', 'q']:
                 print("\n👋 Goodbye!")
                 break
+
+            # Handle download command
+            if user_input.lower() == '/download':
+                print("\n📥 Downloading files from Modal workspace...")
+                try:
+                    result = list_session_files.remote(session_id)
+
+                    if "error" in result:
+                        print(f"❌ {result['error']}")
+                        continue
+
+                    files = result["files"]
+                    if not files:
+                        print("ℹ️  No files found in workspace")
+                        continue
+
+                    print(f"Found {len(files)} file(s):")
+                    for f in files:
+                        print(f"  - {f['path']} ({f['size']:,} bytes)")
+
+                    # Download to local directory
+                    download_dir = Path(f"./downloads/{session_id}")
+                    download_dir.mkdir(parents=True, exist_ok=True)
+
+                    for file_info in files:
+                        file_path = file_info['path']
+                        print(f"\n  Downloading {file_path}...", end="", flush=True)
+
+                        file_result = download_file.remote(session_id, file_path)
+
+                        if "error" in file_result:
+                            print(f" ❌ {file_result['error']}")
+                            continue
+
+                        local_path = download_dir / file_path
+                        local_path.parent.mkdir(parents=True, exist_ok=True)
+                        local_path.write_bytes(file_result["content"])
+
+                        print(f" ✅")
+
+                    print(f"\n✅ Downloaded {len(files)} file(s) to {download_dir.absolute()}\n")
+
+                except Exception as e:
+                    print(f"❌ Download failed: {str(e)}\n")
+
+                continue
 
             print("\n⏳ Processing...\n")
             print("Agent:")
