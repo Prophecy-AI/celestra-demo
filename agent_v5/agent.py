@@ -59,6 +59,7 @@ class ResearchAgent:
                 system=self.system_prompt,
                 messages=self.conversation_history,
                 tools=self.tools.get_schemas(),
+                temperature=0,
             ) as stream:
                 for event in stream:
                     if event.type == "content_block_start":
