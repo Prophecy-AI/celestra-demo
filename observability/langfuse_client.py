@@ -12,9 +12,17 @@ def setup():
     if _client or os.getenv("LANGFUSE_ENABLED") != "1":
         return _client
 
+    # Check for required credentials
+    public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
+    secret_key = os.getenv("LANGFUSE_SECRET_KEY")
+
+    if not public_key or not secret_key:
+        print("LANGFUSE_ENABLED=1 but missing LANGFUSE_PUBLIC_KEY or LANGFUSE_SECRET_KEY")
+        return None
+
     _client = Langfuse(
-        public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-        secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+        public_key=public_key,
+        secret_key=secret_key,
         host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
     )
 

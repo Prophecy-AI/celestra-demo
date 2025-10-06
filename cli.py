@@ -88,8 +88,7 @@ async def main():
     load_dotenv()
 
     # Setup observability (only active if env vars set)
-    from observability import otel, langfuse_client
-    otel.setup()
+    from observability import langfuse_client
     langfuse_client.setup()
 
     GCP_PROJECT = os.getenv("GCP_PROJECT")
@@ -130,6 +129,10 @@ async def main():
         workspace_dir=str(workspace_dir),
         system_prompt=SYSTEM_PROMPT
     )
+
+    # Wrap agent.run with Langfuse tracing if enabled
+    if os.getenv("LANGFUSE_ENABLED") == "1":
+        agent.run = langfuse_client.trace_run(session_id, str(workspace_dir))(agent.run)
 
     # Inject security prehooks for filesystem tools
     path_hook = create_path_validation_prehook(str(workspace_dir))

@@ -9,7 +9,14 @@ from google.oauth2 import service_account
 import os
 import uuid
 
-app = modal.App("agent-v5")
+app = modal.App("agent-v5",
+    secrets=[
+        modal.Secret.from_dotenv(),
+        modal.Secret.from_dict({
+            "DEBUG": os.environ.get("DEBUG", ""),
+            "LANGFUSE_ENABLED": os.environ.get("LANGFUSE_ENABLED", ""),
+        })
+    ])
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -23,15 +30,13 @@ image = (
         "seaborn",
         "matplotlib",
         "scikit-learn",
-        "opentelemetry-api",
-        "opentelemetry-sdk",
-        "opentelemetry-instrumentation-anthropic",
         "langfuse"
     )
     .add_local_python_source("agent_v5")
     .add_local_python_source("bigquery_tool")
     .add_local_python_source("security")
     .add_local_python_source("observability")
+    .add_local_python_source("debug")
 )
 
 workspace_volume = modal.Volume.from_name("agent-workspaces", version=2, create_if_missing=True)
@@ -103,7 +108,6 @@ Current date: 2025-10-06"""
 
 @app.function(
     image=image,
-    secrets=[modal.Secret.from_dotenv()],
     volumes={"/workspace": workspace_volume},
     timeout=600,
     min_containers=1,
@@ -117,10 +121,9 @@ async def agent_turn(
     from agent_v5.agent import ResearchAgent
     from bigquery_tool import create_bigquery_tool
     from security import create_path_validation_prehook
-    from observability import otel, langfuse_client
+    from observability import langfuse_client
 
     # Setup observability (only active if env vars set)
-    otel.setup()
     langfuse_client.setup()
 
     creds_dict = json.loads(gcp_credentials_json)
@@ -134,6 +137,10 @@ async def agent_turn(
         workspace_dir=session_dir,
         system_prompt=SYSTEM_PROMPT
     )
+
+    # Wrap agent.run with Langfuse tracing if enabled
+    if os.getenv("LANGFUSE_ENABLED") == "1":
+        agent.run = langfuse_client.trace_run(session_id, session_dir)(agent.run)
 
     # Inject security prehooks for filesystem tools
     path_hook = create_path_validation_prehook(session_dir)
