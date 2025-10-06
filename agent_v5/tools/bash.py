@@ -57,13 +57,15 @@ class BashTool(BaseTool):
             )
 
             output = stdout.decode() + stderr.decode()
+            exit_code = process.returncode
 
             if len(output) > 30000:
                 output = output[:30000] + "\n... (output truncated)"
 
             return {
                 "content": output,
-                "is_error": False
+                "is_error": False,
+                "debug_summary": f"exit {exit_code}, {len(output)} bytes"
             }
 
         except asyncio.TimeoutError:

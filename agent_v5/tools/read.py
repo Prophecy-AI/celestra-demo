@@ -65,7 +65,8 @@ class ReadTool(BaseTool):
 
             return {
                 "content": content,
-                "is_error": False
+                "is_error": False,
+                "debug_summary": f"{len(selected_lines)} lines, {sum(len(l) for l in selected_lines)} bytes"
             }
 
         except FileNotFoundError:

@@ -56,7 +56,8 @@ class WriteTool(BaseTool):
 
             return {
                 "content": message,
-                "is_error": False
+                "is_error": False,
+                "debug_summary": f"{len(content)} bytes, {content.count(chr(10))+1} lines"
             }
 
         except Exception as e:

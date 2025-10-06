@@ -67,7 +67,11 @@ class ToolRegistry:
                 "is_error": True
             }
 
-        log(f"→ {tool_name}({list(tool_input.keys())})")
+        # Smart input logging - show primary param
+        primary = next(iter(tool_input.values())) if tool_input else ""
+        if isinstance(primary, str):
+            primary = primary.replace("\n", "\\n")[:60]
+        log(f"→ {tool_name}({primary})")
 
         # Run prehook for validation/normalization
         try:
@@ -77,5 +81,12 @@ class ToolRegistry:
             return {"content": str(e), "is_error": True}
 
         result = await self.tools[tool_name].execute(tool_input)
-        log(f"✓ {tool_name}" if not result.get("is_error") else f"✗ {tool_name}", 1 if not result.get("is_error") else 2)
+
+        # Smart result logging - use debug_summary if provided, else fallback
+        if result.get("is_error"):
+            log(f"✗ {tool_name}: {str(result['content'])[:80]}", 2)
+        else:
+            summary = result.get("debug_summary") or f"ok"
+            log(f"✓ {tool_name} {summary}", 1)
+
         return result
