@@ -49,7 +49,7 @@ class ResearchAgent:
 
             with self.anthropic_client.messages.stream(
                 model="claude-sonnet-4-5-20250929",
-                max_tokens=8192,
+                max_tokens=20000,
                 system=self.system_prompt,
                 messages=self.conversation_history,
                 tools=self.tools.get_schemas(),
