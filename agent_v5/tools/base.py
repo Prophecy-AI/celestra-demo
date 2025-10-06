@@ -16,6 +16,7 @@ class BaseTool(ABC):
             workspace_dir: Path to workspace directory where tool operates
         """
         self.workspace_dir = workspace_dir
+        self._custom_prehook = None
 
     @property
     @abstractmethod
@@ -33,6 +34,31 @@ class BaseTool(ABC):
             Dict with keys: name, description, input_schema
         """
         pass
+
+    async def prehook(self, input: Dict) -> None:
+        """
+        Pre-execution hook for validation and input normalization
+
+        Calls custom prehook if set via set_custom_prehook().
+        Can modify input dict in-place (e.g., normalize paths).
+
+        Args:
+            input: Tool input parameters as dict
+
+        Raises:
+            Exception: If validation fails
+        """
+        if self._custom_prehook:
+            await self._custom_prehook(input)
+
+    def set_custom_prehook(self, hook_fn):
+        """
+        Set custom prehook function
+
+        Args:
+            hook_fn: async function(input: Dict) -> None
+        """
+        self._custom_prehook = hook_fn
 
     @abstractmethod
     async def execute(self, input: Dict) -> Dict:

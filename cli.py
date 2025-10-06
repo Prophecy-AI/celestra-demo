@@ -16,6 +16,7 @@ from google.cloud import bigquery
 
 from agent_v5.agent import ResearchAgent
 from agent_v5.tools.mcp_proxy import MCPToolProxy
+from security import create_path_validation_prehook
 
 
 SYSTEM_PROMPT = """You are a healthcare data research engineer with direct BigQuery access.
@@ -124,6 +125,14 @@ async def main():
         workspace_dir=str(workspace_dir),
         system_prompt=SYSTEM_PROMPT
     )
+
+    # Inject security prehooks for filesystem tools
+    path_hook = create_path_validation_prehook(str(workspace_dir))
+    agent.tools.set_prehook("Read", path_hook)
+    agent.tools.set_prehook("Write", path_hook)
+    agent.tools.set_prehook("Edit", path_hook)
+    agent.tools.set_prehook("Glob", path_hook)
+    agent.tools.set_prehook("Grep", path_hook)
 
     if gcp_credentials:
         async def bigquery_query_tool(args):

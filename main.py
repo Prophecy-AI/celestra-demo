@@ -26,6 +26,7 @@ image = (
     )
     .add_local_python_source("agent_v5")
     .add_local_python_source("bigquery_tool")
+    .add_local_python_source("security")
 )
 
 workspace_volume = modal.Volume.from_name("agent-workspaces", version=2, create_if_missing=True)
@@ -110,6 +111,7 @@ async def agent_turn(
 ) -> AsyncGenerator[Dict, None]:
     from agent_v5.agent import ResearchAgent
     from bigquery_tool import create_bigquery_tool
+    from security import create_path_validation_prehook
 
     creds_dict = json.loads(gcp_credentials_json)
     gcp_credentials = service_account.Credentials.from_service_account_info(creds_dict)
@@ -122,6 +124,14 @@ async def agent_turn(
         workspace_dir=session_dir,
         system_prompt=SYSTEM_PROMPT
     )
+
+    # Inject security prehooks for filesystem tools
+    path_hook = create_path_validation_prehook(session_dir)
+    agent.tools.set_prehook("Read", path_hook)
+    agent.tools.set_prehook("Write", path_hook)
+    agent.tools.set_prehook("Edit", path_hook)
+    agent.tools.set_prehook("Glob", path_hook)
+    agent.tools.set_prehook("Grep", path_hook)
 
     bq_tool = create_bigquery_tool(
         workspace_dir=session_dir,

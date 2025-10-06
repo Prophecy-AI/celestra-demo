@@ -17,7 +17,7 @@ class BashTool(BaseTool):
     def schema(self) -> Dict:
         return {
             "name": "Bash",
-            "description": "Execute shell commands in the workspace directory",
+            "description": "Execute shell commands in the workspace directory. IMPORTANT: Stay within the workspace directory - do not use '..' or absolute paths to access files outside your workspace.",
             "input_schema": {
                 "type": "object",
                 "properties": {

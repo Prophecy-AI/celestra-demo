@@ -27,6 +27,19 @@ class ToolRegistry:
         """
         self.tools[tool.name] = tool
 
+    def set_prehook(self, tool_name: str, hook_fn) -> None:
+        """
+        Set custom prehook for a specific tool
+
+        Args:
+            tool_name: Name of tool to attach prehook to
+            hook_fn: async function(input: Dict) -> None
+        """
+        if tool_name not in self.tools:
+            raise ValueError(f"Tool not found: {tool_name}")
+
+        self.tools[tool_name].set_custom_prehook(hook_fn)
+
     def get_schemas(self) -> List[Dict]:
         """
         Get all tool schemas in Anthropic API format
@@ -56,6 +69,17 @@ class ToolRegistry:
         print("tool-execution-debug================")
         print("tool-name=", tool_name, flush=True)
         print("tool-input=", tool_input, flush=True)
+
+        # Run prehook for validation/normalization
+        try:
+            await self.tools[tool_name].prehook(tool_input)
+        except Exception as e:
+            # Prehook validation failed
+            return {
+                "content": str(e),
+                "is_error": True
+            }
+
         result = await self.tools[tool_name].execute(tool_input)
         print("tool-result=", result, flush=True)
         print("end-of-tool-execution==============", flush=True)
