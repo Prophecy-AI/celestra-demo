@@ -71,13 +71,16 @@ async def agent_turn(
     gcp_project: str,
     gcp_credentials_json: str
 ) -> AsyncGenerator[Dict, None]:
+    import sys
     import json
-    import polars as pl
     from pathlib import Path
     from google.oauth2 import service_account
-    from google.cloud import bigquery
+
+    # Fix imports for Modal context
+    sys.path.insert(0, "/root")
+
     from agent_v5.agent import ResearchAgent
-    from agent_v5.tools.mcp_proxy import MCPToolProxy
+    from agent_v5.tools.bigquery_tool import create_bigquery_tool
 
     creds_dict = json.loads(gcp_credentials_json)
     gcp_credentials = service_account.Credentials.from_service_account_info(creds_dict)
@@ -85,54 +88,16 @@ async def agent_turn(
     session_dir = f"/workspace/{session_id}"
     Path(session_dir).mkdir(exist_ok=True, parents=True)
 
-    async def bigquery_query_tool(args):
-        """Execute SQL on BigQuery and save results to workspace"""
-        client = bigquery.Client(project=gcp_project, credentials=gcp_credentials)
-        query_job = client.query(args["sql"])
-        results = query_job.result(timeout=30.0)
-
-        arrow_table = results.to_arrow(create_bqstorage_client=False)
-        df = pl.from_arrow(arrow_table)
-
-        csv_path = f"{session_dir}/{args['dataset_name']}.csv"
-        df.write_csv(csv_path)
-
-        preview = str(df.head(10))
-        return {
-            "content": [{
-                "type": "text",
-                "text": f"Saved {df.shape[0]:,} rows to {args['dataset_name']}.csv\n\n{preview}"
-            }]
-        }
-
     agent = ResearchAgent(
         session_id=session_id,
         workspace_dir=session_dir,
         system_prompt=SYSTEM_PROMPT
     )
 
-    bq_tool = MCPToolProxy(
-        mcp_name="bigquery",
-        tool_name="bigquery_query",
-        tool_fn=bigquery_query_tool,
-        mcp_schema={
-            "description": "Execute SQL on BigQuery rx_claims table and save results to workspace",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "sql": {
-                        "type": "string",
-                        "description": "SQL query to execute"
-                    },
-                    "dataset_name": {
-                        "type": "string",
-                        "description": "Name for the output CSV file (without .csv extension)"
-                    }
-                },
-                "required": ["sql", "dataset_name"]
-            }
-        },
-        workspace_dir=session_dir
+    bq_tool = create_bigquery_tool(
+        workspace_dir=session_dir,
+        gcp_project=gcp_project,
+        gcp_credentials=gcp_credentials
     )
 
     agent.tools.register(bq_tool)
