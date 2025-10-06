@@ -48,7 +48,8 @@ def create_bigquery_tool(
             "content": [{
                 "type": "text",
                 "text": f"Saved {df.shape[0]:,} rows to {csv_absolute_path}\n\n{preview}"
-            }]
+            }],
+            "debug_summary": f"{args.get('description', 'query')}: {df.shape[0]} rows"
         }
 
     bq_tool = MCPToolProxy(
@@ -67,9 +68,13 @@ def create_bigquery_tool(
                     "dataset_name": {
                         "type": "string",
                         "description": "Name for the output CSV file (without .csv extension)"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Brief description of what this query does"
                     }
                 },
-                "required": ["sql", "dataset_name"]
+                "required": ["sql", "dataset_name", "description"]
             }
         },
         workspace_dir=workspace_dir

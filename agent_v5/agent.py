@@ -5,7 +5,7 @@ import os
 from typing import List, Dict, AsyncGenerator
 from anthropic import Anthropic
 from agent_v5.tools.registry import ToolRegistry
-from debug import log
+from debug import log, with_session
 from agent_v5.tools.bash import BashTool
 from agent_v5.tools.read import ReadTool
 from agent_v5.tools.write import WriteTool
@@ -26,6 +26,7 @@ class ResearchAgent:
         self.tools = ToolRegistry(workspace_dir)
         self._register_core_tools()
         self.anthropic_client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        self.run = with_session(session_id)(self.run)
 
     def _register_core_tools(self):
         """Register all core tools"""
