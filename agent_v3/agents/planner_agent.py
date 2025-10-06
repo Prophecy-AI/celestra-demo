@@ -2,7 +2,7 @@
 Planner agent for decomposing user queries into actionable steps
 """
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, Optional
 from .base_agent import BaseAgent
 from ..context import Context
 
@@ -160,34 +160,31 @@ Focus on creating comprehensive, executable plans that can be followed by other 
             # Generate structured plan
             response = self.create_structured_message(messages, plan_schema)
 
-            # Parse the structured response
+            # Parse the structured response with robust fallback
             if response and "content" in response:
-                try:
-                    plan = json.loads(response["content"])
+                content = response["content"]
+
+                # Try multiple JSON extraction strategies
+                plan = self._extract_json_with_fallback(content)
+
+                if plan and isinstance(plan, dict):
                     return {
                         "success": True,
                         "plan": plan,
                         "agent": self.name,
                         "message": f"Created {len(plan.get('analysis_steps', []))} step analysis plan"
                     }
-                except json.JSONDecodeError:
-                    # Fallback to extracting JSON from response
-                    content = response["content"]
-                    start = content.find("{")
-                    end = content.rfind("}") + 1
-                    if start != -1 and end != -1:
-                        plan_json = content[start:end]
-                        plan = json.loads(plan_json)
-                        return {
-                            "success": True,
-                            "plan": plan,
-                            "agent": self.name,
-                            "message": f"Created {len(plan.get('analysis_steps', []))} step analysis plan"
-                        }
+                else:
+                    return {
+                        "success": False,
+                        "error": "Failed to parse structured plan - invalid JSON format",
+                        "agent": self.name,
+                        "raw_response": content[:500]  # First 500 chars for debugging
+                    }
 
             return {
                 "success": False,
-                "error": "Failed to generate structured plan",
+                "error": "Failed to generate structured plan - no response from LLM",
                 "agent": self.name,
                 "raw_response": response
             }
@@ -235,3 +232,72 @@ Focus on creating comprehensive, executable plans that can be followed by other 
                             validation_results["warnings"].append(f"Unknown tool in step {step.get('step')}: {tool}")
 
         return validation_results
+
+    def _extract_json_with_fallback(self, content: str) -> Optional[Dict[str, Any]]:
+        """
+        Extract JSON from LLM response with multiple fallback strategies.
+        Handles cases where LLM returns JSON with markdown, extra text, etc.
+        """
+        import re
+
+        # Strategy 1: Try direct JSON parsing
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+
+        # Strategy 2: Remove markdown code blocks
+        try:
+            # Remove ```json ... ``` or ``` ... ```
+            cleaned = re.sub(r'```(?:json)?\s*\n(.*?)\n```', r'\1', content, flags=re.DOTALL)
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+
+        # Strategy 3: Find outermost balanced braces
+        try:
+            brace_count = 0
+            start_idx = -1
+
+            for i, char in enumerate(content):
+                if char == '{':
+                    if brace_count == 0:
+                        start_idx = i
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+                    if brace_count == 0 and start_idx >= 0:
+                        # Found complete JSON object
+                        potential_json = content[start_idx:i+1]
+                        try:
+                            return json.loads(potential_json)
+                        except json.JSONDecodeError:
+                            pass
+                        start_idx = -1
+        except Exception:
+            pass
+
+        # Strategy 4: Try finding JSON between first { and last }
+        try:
+            start = content.find("{")
+            end = content.rfind("}") + 1
+            if start != -1 and end != 0:
+                potential_json = content[start:end]
+                return json.loads(potential_json)
+        except json.JSONDecodeError:
+            pass
+
+        # Strategy 5: Clean common JSON issues and retry
+        try:
+            # Remove comments, trailing commas, etc.
+            cleaned = re.sub(r'//.*?\n|/\*.*?\*/', '', content, flags=re.DOTALL)  # Remove comments
+            cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)  # Remove trailing commas
+            start = cleaned.find("{")
+            end = cleaned.rfind("}") + 1
+            if start != -1 and end != 0:
+                return json.loads(cleaned[start:end])
+        except json.JSONDecodeError:
+            pass
+
+        # All strategies failed
+        return None

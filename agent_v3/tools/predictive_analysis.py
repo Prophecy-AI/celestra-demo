@@ -425,29 +425,48 @@ class PredictiveAnalysisTool(Tool):
             return {"success": False, "error": str(e)}
 
     def _execute_prediction_modeling(self, context: Any) -> Dict[str, Any]:
-        """Execute simple prediction modeling (placeholder for now)"""
+        """Execute prediction modeling using actual feature data"""
 
-        # This is a simplified placeholder - would implement actual ML modeling
+        # Get features dataset from context
+        datasets = context.get_all_datasets()
+
+        if not datasets:
+            return {
+                "success": False,
+                "error": "No feature datasets available for prediction modeling. Execute feature engineering first."
+            }
+
+        # Find features dataset (looking for pharmaceutical or general features)
+        features_dataset = None
+        for name, df in datasets.items():
+            if "feature" in name.lower() or "pharmaceutical" in name.lower():
+                features_dataset = df
+                break
+
+        if features_dataset is None:
+            return {
+                "success": False,
+                "error": "No feature dataset found. Execute pharmaceutical_feature_engineering or feature_engineering first."
+            }
+
+        # Basic validation of features dataset
+        required_columns = ["PRESCRIBER_NPI_NBR"]  # At minimum need prescriber identifier
+
+        if not any(col in features_dataset.columns for col in required_columns):
+            return {
+                "success": False,
+                "error": f"Features dataset missing required columns. Has: {list(features_dataset.columns)}"
+            }
+
+        # TODO: Implement actual ML modeling here
+        # For now, return indication that real data is needed
         return {
             "success": True,
-            "model_metrics": {
-                "accuracy": 0.78,
-                "precision": 0.82,
-                "recall": 0.75,
-                "f1_score": 0.78
-            },
-            "feature_importance": {
-                "total_volume": 0.35,
-                "avg_mom_growth": 0.28,
-                "volume_cv": 0.18,
-                "active_days": 0.12,
-                "drug_diversity": 0.07
-            },
-            "prediction_summary": {
-                "main_finding": "Early volume and growth patterns predict high prescribing at Month 12",
-                "sample_size": 1247,
-                "high_prescriber_prediction_rate": 0.78
-            }
+            "message": "Prediction modeling requires actual implementation with sklearn/statsmodels",
+            "data_available": True,
+            "feature_count": len(features_dataset.columns),
+            "sample_size": len(features_dataset),
+            "note": "Replace this with actual ML model training and evaluation"
         }
 
     def _get_available_tools_for_agent(self, agent_type: str, context: Any) -> Dict[str, Any]:

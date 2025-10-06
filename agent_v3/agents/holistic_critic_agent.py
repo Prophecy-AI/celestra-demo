@@ -124,16 +124,22 @@ COMPREHENSIVE ASSESSMENT DIMENSIONS:
 
 6. CLINICAL CONTEXT (0.0-1.0):
    - Was external clinical knowledge used when needed?
-   - Were web searches performed for domain context?
+   - Were web searches performed for domain context? (MANDATORY for predictive queries)
    - Is pharmaceutical expertise evident?
+   - Score 0.0-0.3: No web search for analytical query (CRITICAL FAILURE)
+   - Score 0.4-0.6: Minimal context, generic searches
+   - Score 0.7-0.8: Good context usage, relevant searches
+   - Score 0.9-1.0: Excellent domain expertise, comprehensive context
 
 CRITICAL ISSUES REQUIRING REVISION:
 - SQL errors repeated without resolution
 - Missing critical data for answering the query
 - Factual hallucinations or inaccuracies
 - Complete failure to address user's question
-- No use of web search when clinical context needed
+- **No use of web search when clinical context needed (MUST trigger revision)**
+- **Predictive/analytical query without web_search tool usage (MUST trigger revision)**
 - Pharmaceutical predictors missing for predictive queries
+- Generic analysis without industry benchmarks or domain knowledge
 
 WORKFLOW PATTERNS TO CHECK:
 - Predictive analysis queries should use multi-agent workflow
@@ -332,6 +338,22 @@ TOOL EXECUTION SEQUENCE:
         prompt += f"\nERRORS ENCOUNTERED: {len(errors)}\n"
         for error in errors[:5]:
             prompt += f"- {error.get('tool_name')}: {error.get('error_message', '')[:100]}\n"
+
+        # Check for web search usage in predictive/analytical queries
+        web_search_used = any(
+            exec.get('tool_name') in ['web_search', 'clinical_context_search']
+            for exec in tool_executions
+        )
+        is_analytical_query = any(keyword in original_query.lower() for keyword in [
+            'predict', 'prediction', 'early', 'indicator', 'characteristic',
+            'pattern', 'high prescriber', 'signal', 'feature'
+        ])
+
+        prompt += f"\n⚠️ WEB SEARCH USAGE CHECK:\n"
+        prompt += f"- Query type: {'ANALYTICAL/PREDICTIVE' if is_analytical_query else 'DESCRIPTIVE'}\n"
+        prompt += f"- Web search used: {'YES ✓' if web_search_used else 'NO ✗ (CRITICAL ISSUE)'}\n"
+        if is_analytical_query and not web_search_used:
+            prompt += f"- **CRITICAL**: Analytical query WITHOUT web search = clinical_context score MUST be < 0.3 and requires_revision = true\n"
 
         prompt += "\nINDIVIDUAL EVALUATOR RESULTS:\n"
 

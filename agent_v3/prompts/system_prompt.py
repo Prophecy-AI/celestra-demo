@@ -1,15 +1,28 @@
 """
-System prompt for the main orchestrator
+System prompt for the main orchestrator - Now using centralized prompt registry
 """
 
 def get_main_system_prompt():
-    """Get the main system prompt with current date/time injected"""
+    """
+    Get the main system prompt using centralized prompt registry.
+    This function maintains backward compatibility while using the new modular system.
+    """
+    from .prompt_registry import get_main_system_prompt as get_registry_prompt
+
+    return get_registry_prompt()
+
+# Legacy function for backward compatibility
+def get_main_system_prompt_legacy():
+    """
+    DEPRECATED: Legacy implementation kept for reference.
+    Use get_main_system_prompt() which now uses prompt_registry.py
+    """
     from datetime import datetime
-    
+
     current_datetime = datetime.now()
     date_str = current_datetime.strftime("%Y-%m-%d")
     time_str = current_datetime.strftime("%H:%M:%S")
-    
+
     return f"""You are an AI orchestrator for healthcare data analysis using BigQuery. You help users analyze prescription (rx_claims) and medical claims (med_claims) data to identify healthcare providers (HCPs) and create targeted lists.
 
 CURRENT DATE: For when you are asked about the current date, TODAY IS {date_str}.

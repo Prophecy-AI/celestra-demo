@@ -1,11 +1,57 @@
 """
-Context management for agent_v3 - Simplified state tracking
+Context management for agent_v3 - Simplified state tracking with structured metadata
 """
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from enum import Enum
 import time
 import polars as pl
+
+
+class WorkflowStage(Enum):
+    """Enumeration of multi-agent workflow stages"""
+    PLANNING = "planning"
+    RETRIEVAL = "retrieval"
+    ANALYSIS = "analysis"
+    ANSWERING = "answering"
+    VALIDATION = "validation"
+    REVISION = "revision"
+
+
+@dataclass
+class AnalysisPlan:
+    """Structured analysis plan from PlannerAgent"""
+    query_type: str
+    objective: str
+    data_requirements: Dict[str, Any]
+    feature_engineering: Dict[str, Any]
+    analysis_steps: List[Dict[str, Any]]
+    success_criteria: List[str]
+    expected_outputs: List[str]
+    created_at: float = field(default_factory=time.time)
+
+
+@dataclass
+class RetrievedContext:
+    """Structured retrieved context from RetrieverAgent"""
+    sources: List[str]
+    clinical_facts: List[str]
+    benchmarks: Dict[str, Any]
+    domain_knowledge: Dict[str, Any]
+    retrieved_at: float = field(default_factory=time.time)
+
+
+@dataclass
+class FeatureMetadata:
+    """Metadata for engineered features"""
+    feature_dataset_name: str
+    feature_types: List[str]
+    feature_count: int
+    sample_size: int
+    target_month: int
+    early_window: int
+    created_at: float = field(default_factory=time.time)
 
 
 @dataclass
@@ -38,6 +84,12 @@ class Context:
         self.created_at = datetime.now()
         self.original_user_query: Optional[str] = None  # Store original query for evaluations
         self.metadata: Dict[str, Any] = {}  # Store arbitrary metadata for multi-agent workflows
+
+        # Structured metadata stores
+        self.current_workflow_stage: Optional[WorkflowStage] = None
+        self.analysis_plan: Optional[AnalysisPlan] = None
+        self.retrieved_context: Optional[RetrievedContext] = None
+        self.feature_metadata: Optional[FeatureMetadata] = None
 
     def add_user_message(self, content: str) -> None:
         """Add user message to conversation history"""
@@ -143,6 +195,73 @@ class Context:
     def has_metadata(self, key: str) -> bool:
         """Check if metadata key exists"""
         return key in self.metadata
+
+    # Structured metadata methods
+    def set_workflow_stage(self, stage: WorkflowStage) -> None:
+        """Set current workflow stage"""
+        self.current_workflow_stage = stage
+
+    def get_workflow_stage(self) -> Optional[WorkflowStage]:
+        """Get current workflow stage"""
+        return self.current_workflow_stage
+
+    def set_analysis_plan(self, plan_dict: Dict[str, Any]) -> None:
+        """Store structured analysis plan"""
+        self.analysis_plan = AnalysisPlan(
+            query_type=plan_dict.get("query_type", "unknown"),
+            objective=plan_dict.get("objective", ""),
+            data_requirements=plan_dict.get("data_requirements", {}),
+            feature_engineering=plan_dict.get("feature_engineering", {}),
+            analysis_steps=plan_dict.get("analysis_steps", []),
+            success_criteria=plan_dict.get("success_criteria", []),
+            expected_outputs=plan_dict.get("expected_outputs", [])
+        )
+
+    def get_analysis_plan(self) -> Optional[AnalysisPlan]:
+        """Get analysis plan"""
+        return self.analysis_plan
+
+    def set_retrieved_context(
+        self,
+        sources: List[str],
+        clinical_facts: List[str],
+        benchmarks: Dict[str, Any],
+        domain_knowledge: Dict[str, Any]
+    ) -> None:
+        """Store structured retrieved context"""
+        self.retrieved_context = RetrievedContext(
+            sources=sources,
+            clinical_facts=clinical_facts,
+            benchmarks=benchmarks,
+            domain_knowledge=domain_knowledge
+        )
+
+    def get_retrieved_context(self) -> Optional[RetrievedContext]:
+        """Get retrieved context"""
+        return self.retrieved_context
+
+    def set_feature_metadata(
+        self,
+        dataset_name: str,
+        feature_types: List[str],
+        feature_count: int,
+        sample_size: int,
+        target_month: int = 12,
+        early_window: int = 3
+    ) -> None:
+        """Store feature engineering metadata"""
+        self.feature_metadata = FeatureMetadata(
+            feature_dataset_name=dataset_name,
+            feature_types=feature_types,
+            feature_count=feature_count,
+            sample_size=sample_size,
+            target_month=target_month,
+            early_window=early_window
+        )
+
+    def get_feature_metadata(self) -> Optional[FeatureMetadata]:
+        """Get feature metadata"""
+        return self.feature_metadata
 
     def get_last_tool_name(self) -> Optional[str]:
         """Get the name of the last executed tool"""

@@ -51,6 +51,6 @@ class BaseAgent(ABC):
         return {
             "datasets": list(context.get_all_datasets().keys()),
             "last_tool_execution": context.get_last_tool_name(),
-            "conversation_length": len(context.messages),
+            "conversation_length": len(context.conversation_history),
             "has_errors": context.has_error()
         }

@@ -91,10 +91,18 @@ class PharmaceuticalFeatureEngineeringTool(Tool):
             raise ValueError(f"Missing required columns: {missing_columns}")
 
         # Convert service date to datetime and add time-based columns
-        df = df.with_columns([
-            pl.col("SERVICE_DATE_DD").str.to_date().alias("service_date"),
-            pl.col("DISPENSED_QUANTITY_VAL").cast(pl.Float64).alias("quantity")
-        ])
+        # Handle both STRING and DATE types for SERVICE_DATE_DD
+        if df.schema["SERVICE_DATE_DD"] == pl.String:
+            df = df.with_columns([
+                pl.col("SERVICE_DATE_DD").str.to_date().alias("service_date"),
+                pl.col("DISPENSED_QUANTITY_VAL").cast(pl.Float64).alias("quantity")
+            ])
+        else:
+            # Already a DATE type, just alias it
+            df = df.with_columns([
+                pl.col("SERVICE_DATE_DD").alias("service_date"),
+                pl.col("DISPENSED_QUANTITY_VAL").cast(pl.Float64).alias("quantity")
+            ])
 
         # Filter to early months (1-early_window) for feature engineering
         early_data = self._filter_to_early_months(df, early_window)

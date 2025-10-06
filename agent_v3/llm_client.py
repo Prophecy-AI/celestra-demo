@@ -3,7 +3,6 @@ LLM client with strict single tool calling enforcement
 """
 import os
 import json
-import re
 from typing import Dict, Any, List, Optional
 import anthropic
 from opentelemetry.instrumentation.anthropic import AnthropicInstrumentor
@@ -16,7 +15,7 @@ class LLMClient:
     def __init__(self):
         self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         self.model = "claude-sonnet-4-20250514"
-        self.max_tokens = 2048
+        self.max_tokens = 8192  # Increased to handle large SQL queries in parameters
         self.temperature = 0
 
     def create_message(
@@ -68,33 +67,28 @@ class LLMClient:
         except json.JSONDecodeError:
             pass
 
-        # Try to find JSON within the content
-        json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
-        matches = re.findall(json_pattern, content, re.DOTALL)
+        # Try to find JSON by matching balanced braces
+        # Look for outermost { } that contains "tool"
+        brace_count = 0
+        start_idx = -1
 
-        for match in matches:
-            try:
-                data = json.loads(match)
-                if self._validate_tool_call(data, available_tools):
-                    return data
-            except json.JSONDecodeError:
-                continue
-
-        # Try to extract tool name and parameters manually
-        tool_match = re.search(r'"tool"\s*:\s*"([^"]+)"', content)
-        params_match = re.search(r'"parameters"\s*:\s*(\{[^}]+\})', content)
-
-        if tool_match:
-            tool_name = tool_match.group(1)
-            if tool_name in available_tools:
-                try:
-                    parameters = json.loads(params_match.group(1)) if params_match else {}
-                    return {
-                        "tool": tool_name,
-                        "parameters": parameters
-                    }
-                except json.JSONDecodeError:
-                    pass
+        for i, char in enumerate(content):
+            if char == '{':
+                if brace_count == 0:
+                    start_idx = i
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0 and start_idx >= 0:
+                    # Found a complete JSON object
+                    potential_json = content[start_idx:i+1]
+                    try:
+                        data = json.loads(potential_json)
+                        if self._validate_tool_call(data, available_tools):
+                            return data
+                    except json.JSONDecodeError:
+                        pass
+                    start_idx = -1
 
         return None
 

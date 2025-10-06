@@ -97,12 +97,47 @@ def run_interactive(debug: bool = False):
                 print(f"📈 Total rows collected: {summary.get('total_rows', 0):,}")
                 print(f"⏱️  Duration: {duration:.1f} seconds")
                 print(f"💾 Session ID: {session_id}")
+
+                # Show revision count if any revisions occurred
+                revision_count = result.get("revision_count", 0)
+                if revision_count > 0:
+                    print(f"🔄 Quality improvements: {revision_count} revision{'s' if revision_count > 1 else ''} applied")
+
+                # Log critique to file but don't display to user
+                critique = result.get("critique")
+                if critique and debug:
+                    # Only show in debug mode
+                    print("\n" + "="*80)
+                    print("🔍 QUALITY EVALUATION (Holistic Critic) - DEBUG")
+                    print("="*80)
+                    print(f"Overall Quality Score: {critique.get('overall_quality_score', 'N/A'):.2f}")
+                    print(f"Revision Priority: {critique.get('revision_priority', 'N/A')}")
+                    print(f"Clinical Context Score: {critique.get('clinical_context', 0):.2f}")
+                    print("="*80)
             else:
                 print("\n" + "="*80)
                 print("⚠️  SESSION ENDED WITH ISSUES")
                 print("="*80)
                 if result.get("error"):
                     print(f"Error: {result['error']}")
+
+                # Display critique even on failure
+                critique = result.get("critique")
+                if critique:
+                    print("\n" + "="*80)
+                    print("🔍 QUALITY EVALUATION (Holistic Critic)")
+                    print("="*80)
+                    print(f"Overall Quality Score: {critique.get('overall_quality_score', 'N/A'):.2f}")
+                    print(f"Requires Revision: {'Yes ⚠️' if critique.get('requires_revision') else 'No ✓'}")
+
+                    issues = critique.get('critical_issues', [])
+                    if issues:
+                        print(f"\n⚠️  Critical Issues:")
+                        for issue in issues[:5]:
+                            print(f"  • {issue}")
+
+                    print(f"\n📝 Summary: {critique.get('critique_summary', 'N/A')}")
+                    print("="*80)
 
         except KeyboardInterrupt:
             print("\n\n🛑 Interrupted by user")

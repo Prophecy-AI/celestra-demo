@@ -25,7 +25,8 @@ class RecursiveOrchestrator:
         self.tool_names = list(self.tools.keys())
         self.io_handler = io_handler
         self.critic_agent = HolisticCriticAgent()  # Initialize holistic critic
-        self.revision_attempted = False  # Track if revision has been attempted
+        self.revision_count = 0  # Track revision iterations
+        self.max_revisions = 2  # Allow up to 2 revision loops
 
     def log(self, message: str):
         """Debug logging"""
@@ -60,15 +61,26 @@ class RecursiveOrchestrator:
             self.log("Running holistic critic evaluation before returning to user...")
             critique = self._run_holistic_critic_evaluation()
 
-            # Check if revision is required
-            if critique and critique.get("requires_revision") and critique.get("revision_priority") in ["critical", "high"]:
-                self.log(f"Critic requires revision: {critique.get('revision_priority')}")
+            # Check if revision is required (expanded to include medium priority and quality threshold)
+            requires_revision = (
+                critique.get("requires_revision", False) and
+                critique.get("revision_priority") in ["critical", "high", "medium"] and
+                critique.get("overall_quality_score", 1.0) < 0.85 and
+                self.revision_count < self.max_revisions  # Check revision limit
+            )
+
+            if critique and requires_revision:
+                self.log(f"Critic requires revision (attempt {self.revision_count + 1}/{self.max_revisions}): priority={critique.get('revision_priority')}, quality={critique.get('overall_quality_score')}")
 
                 # Add critique feedback to context for revision
                 revision_result = self._handle_revision_feedback(critique)
 
-                # Update result with revision outcome
-                result = revision_result if revision_result.get("completed") else result
+                # If revision succeeded, re-run critic evaluation
+                if revision_result.get("completed"):
+                    self.log("Revision completed, re-running critic evaluation...")
+                    critique = self._run_holistic_critic_evaluation()  # Re-evaluate after revision
+                    self.log(f"Post-revision quality score: {critique.get('overall_quality_score')}")
+                    result = revision_result
 
             # Get final summary
             summary = self.context.get_summary()
@@ -78,16 +90,22 @@ class RecursiveOrchestrator:
                 "summary": summary,
                 "datasets": self.context.get_all_datasets(),
                 "error": result.get("error"),
-                "critique": critique  # Include critique in response
+                "critique": critique,  # Include critique for logging (not shown to user)
+                "revision_count": self.revision_count  # Track how many revisions occurred
             }
         except (ConnectionLostError, MaxRecursionError) as e:
             # These are terminal errors - return immediately
+            # But STILL run critic evaluation for learning/debugging
             self.log(f"Terminal error: {str(e)}")
+            self.log("Running critic evaluation even on terminal error for debugging...")
+            critique = self._run_holistic_critic_evaluation()
+
             return {
                 "success": False,
                 "summary": self.context.get_summary(),
                 "datasets": self.context.get_all_datasets(),
-                "error": str(e)
+                "error": str(e),
+                "critique": critique  # Include critique even on errors
             }
 
     def _recursive_loop(self, depth: int = 0) -> Dict[str, Any]:
@@ -236,6 +254,16 @@ class RecursiveOrchestrator:
 
         # Handle based on tool type
         if tool_name == "complete":
+            # VALIDATION: Ensure we have actual data before allowing completion
+            datasets = self.context.get_all_datasets()
+            if not datasets:
+                self.log("WARNING: 'complete' called without any datasets. Rejecting completion.")
+                self.context.add_system_hint(
+                    "You attempted to complete without retrieving any data. "
+                    "You must execute bigquery_sql_query to get actual data before using 'complete'."
+                )
+                return self._recursive_loop(depth + 1)
+
             # Check if user wants to continue or end
             action = result.get("action", "continue")
             if action == "end":
@@ -269,16 +297,17 @@ class RecursiveOrchestrator:
             # First iteration - no hints needed
             return
 
-        # If last tool was SQL generation, hint to execute it
+        # If last tool was SQL generation, REQUIRE execution (not just hint)
         if last_tool in ["text_to_sql_rx", "text_to_sql_med", "text_to_sql_provider_payments", "text_to_sql_providers_bio"]:
             last_result = self.context.get_last_tool_result()
             if "sql" in last_result and not self.context.has_error():
                 hint_msg = (
-                    "SQL query has been generated. Use 'bigquery_sql_query' to execute it, "
-                    "or call more tools IF NECESSARY to capture all the context needed from this or other datasets."
+                    "SQL query has been generated. You MUST execute it using 'bigquery_sql_query' NOW. "
+                    "Do NOT skip this step or use 'complete' without executing the query. "
+                    "The SQL query is ready and must be executed to retrieve actual data."
                 )
                 self.context.add_system_hint(hint_msg)
-                self.log(f"Added hint: {hint_msg}")
+                self.log(f"Added strong hint: SQL query MUST be executed next")
 
         # If we have collected some data, hint about completion
         elif last_tool == "bigquery_sql_query":
@@ -413,7 +442,7 @@ class RecursiveOrchestrator:
     def _handle_revision_feedback(self, critique: Dict[str, Any]) -> Dict[str, Any]:
         """
         Handle revision feedback from critic.
-        Adds critique to context and triggers one revision attempt.
+        Adds critique to context and triggers revision attempt.
 
         Args:
             critique: Critique from HolisticCriticAgent
@@ -421,12 +450,9 @@ class RecursiveOrchestrator:
         Returns:
             Revision result
         """
-        # Only allow one revision attempt to avoid infinite loops
-        if self.revision_attempted:
-            self.log("Revision already attempted once, skipping further revisions")
-            return {"completed": False, "error": "Max revisions reached"}
-
-        self.revision_attempted = True
+        # Increment revision counter
+        self.revision_count += 1
+        self.log(f"Starting revision attempt {self.revision_count}/{self.max_revisions}")
 
         # Extract specific improvement suggestions
         critical_issues = critique.get("critical_issues", [])
