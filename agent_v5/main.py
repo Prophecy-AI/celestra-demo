@@ -63,7 +63,7 @@ Current date: 2025-10-06"""
     secrets=[modal.Secret.from_dotenv()],
     volumes={"/workspace": workspace_volume},
     timeout=600,
-    keep_warm=1,
+    min_containers=1,
 )
 async def agent_turn(
     session_id: str,

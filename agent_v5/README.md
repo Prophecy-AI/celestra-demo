@@ -105,6 +105,7 @@ agent_v5/
 ├── __init__.py
 ├── README.md                    # This file
 ├── IMPLEMENTATION_PLAN.md       # Detailed implementation plan
+├── cli.py                       # Local CLI (run without Modal)
 ├── main.py                      # Modal deployment (replaces agent_v4)
 ├── agent.py                     # ResearchAgent class
 ├── tools/
@@ -136,9 +137,47 @@ agent_v5/
 
 ---
 
+## Quick Start
+
+### Run Locally (Recommended First)
+
+```bash
+# 1. Install dependencies
+pip install anthropic google-cloud-bigquery polars pyarrow python-dotenv
+
+# 2. Set environment variables in .env:
+# ANTHROPIC_API_KEY=sk-ant-...
+# GCP_PROJECT=your-project (optional)
+# GCP_SERVICE_ACCOUNT_JSON={"type":"service_account",...} (optional)
+
+# 3. Run the local CLI
+python agent_v5/cli.py
+```
+
+**Example interaction:**
+```
+🤖 Agent V5 - Research Engineer (Local CLI)
+Session: abc-123
+Workspace: ./workspace/abc-123
+BigQuery: ✅ Enabled
+
+You: Create a file called test.txt with "Hello World"
+⏳ Processing...
+
+Agent:
+[Tool: Write]
+I've created the file test.txt with "Hello World"
+```
+
+**Local CLI vs Modal:**
+- **Local CLI (`cli.py`)**: Runs on your machine, workspace in `./workspace/`, great for testing
+- **Modal (`main.py`)**: Runs in sandboxed containers, workspace in Modal volumes, production ready
+
+---
+
 ## Deployment
 
-### Run Locally (Test)
+### Run Tests
 ```bash
 # Install dependencies
 pip install anthropic google-cloud-bigquery polars pyarrow pytest pytest-asyncio
