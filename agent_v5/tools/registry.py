@@ -53,4 +53,10 @@ class ToolRegistry:
                 "is_error": True
             }
 
-        return await self.tools[tool_name].execute(tool_input)
+        print("tool-execution-debug================")
+        print("tool-name=", tool_name, flush=True)
+        print("tool-input=", tool_input, flush=True)
+        result = await self.tools[tool_name].execute(tool_input)
+        print("tool-result=", result, flush=True)
+        print("end-of-tool-execution==============", flush=True)
+        return result
