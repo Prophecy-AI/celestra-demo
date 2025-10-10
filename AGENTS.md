@@ -1586,6 +1586,89 @@ Choose deployment strategy (see Deployment Strategies section):
 
 ---
 
+## Implementation Standards for agent_v5
+
+### Code Quality Requirements
+
+**agent_v5 framework follows strict implementation standards:**
+
+1. **Tool Implementation**
+   - All tools inherit from `BaseTool` abstract class
+   - Required methods: `name`, `schema`, `execute(input) -> Dict`
+   - Prehook pattern for validation (`prehook()` method)
+   - Return format: `{"content": str, "is_error": bool}`
+   - Workspace-scoped (tools operate within `workspace_dir`)
+
+2. **Testing Standards**
+   - **2,651 lines of test code** across 111 test cases
+   - Real API tests (not mocked) - tests use actual Anthropic API
+   - Comprehensive coverage: unit tests, integration tests, e2e tests
+   - All tests use `pytest.mark.asyncio` for async execution
+   - Temporary workspace directories for isolation
+
+3. **Agent Architecture**
+   - `ResearchAgent` class with agentic loop in `agent.py`
+   - Tool registry pattern for centralized management
+   - Streaming responses via `AsyncGenerator[Dict, None]`
+   - Temperature=0 for deterministic behavior
+   - Debug logging via `debug.py` (enabled with `DEBUG=1`)
+
+### Symlink Architecture
+
+**mle-bench integration uses symlinks to eliminate duplication:**
+
+- `mle-bench/agents/agent_v5_kaggle/` contains kaggle-specific code
+- Shared resources use symlinks to canada-research root:
+  - `agent_v5/` → `../../../agent_v5` (framework)
+  - `debug.py` → `../../../debug.py` (logging)
+  - `observability/` → `../../../observability` (tracing)
+  - `security/` → `../../../security` (validation)
+
+**Benefits:**
+- Single source of truth - changes propagate automatically
+- No code duplication (~400 lines eliminated)
+- Maintains mle-bench as regular directory (not submodule)
+
+**Updating mle-bench from upstream:**
+```bash
+git subtree pull --prefix=mle-bench https://github.com/openai/mle-bench.git main --squash
+```
+
+### Key Implementation Patterns
+
+1. **Streaming Pattern**
+   ```python
+   async def run(self, user_message: str) -> AsyncGenerator[Dict, None]:
+       while True:
+           # Stream text deltas
+           yield {"type": "text_delta", "text": chunk}
+
+           # Execute tools
+           yield {"type": "tool_execution", "tool_name": name, ...}
+
+           # Signal completion
+           yield {"type": "done"}
+   ```
+
+2. **Prehook Validation Pattern**
+   ```python
+   async def prehook(self, input: Dict) -> None:
+       if self._custom_prehook:
+           await self._custom_prehook(input)  # Validates/normalizes input
+   ```
+
+3. **Tool Registration Pattern**
+   ```python
+   def _register_core_tools(self):
+       self.tools.register(BashTool(self.workspace_dir))
+       self.tools.register(ReadTool(self.workspace_dir))
+       # ... register all tools
+   ```
+
+**When building agents: Follow agent_v5 patterns for consistency and reliability.**
+
+---
+
 ## Summary
 
 ### Key Takeaways
