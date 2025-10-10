@@ -75,3 +75,27 @@ async def test_sample_size_check():
         
         assert not result["is_error"]
         assert "too small" in result["content"]
+
+
+@pytest.mark.asyncio
+async def test_t_test():
+    """Test two-sample t-test."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tool = StatisticalValidationTool(tmpdir)
+        
+        # Create two groups with different means
+        np.random.seed(42)
+        group1 = np.random.normal(0, 1, 30).tolist()
+        group2 = np.random.normal(2, 1, 30).tolist()
+        
+        result = await tool.execute({
+            "operation": "t_test",
+            "data": {
+                "group1": group1,
+                "group2": group2
+            }
+        })
+        
+        assert not result["is_error"]
+        assert "t-test" in result["content"]
+        assert "p_value" in result["content"]

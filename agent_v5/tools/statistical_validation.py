@@ -28,7 +28,7 @@ class StatisticalValidationTool(BaseTool):
                     "operation": {
                         "type": "string",
                         "description": "Operation to perform",
-                        "enum": ["echo", "normality_test", "sample_size_check"]
+                        "enum": ["echo", "normality_test", "sample_size_check", "t_test"]
                     },
                     "data": {
                         "type": "object",
@@ -41,6 +41,14 @@ class StatisticalValidationTool(BaseTool):
                             "test_type": {
                                 "type": "string",
                                 "description": "Type of statistical test planned"
+                            },
+                            "group1": {
+                                "type": "array",
+                                "description": "First group of values"
+                            },
+                            "group2": {
+                                "type": "array", 
+                                "description": "Second group of values"
                             }
                         }
                     }
@@ -65,6 +73,9 @@ class StatisticalValidationTool(BaseTool):
         
         elif operation == "sample_size_check":
             return self._sample_size_check(data)
+        
+        elif operation == "t_test":
+            return self._t_test(data)
         
         return {
             "content": f"Unknown operation: {operation}",
@@ -140,5 +151,38 @@ class StatisticalValidationTool(BaseTool):
         except Exception as e:
             return {
                 "content": f"Error in sample size check: {str(e)}",
+                "is_error": True
+            }
+    
+    def _t_test(self, data: Dict) -> Dict:
+        """Perform two-sample t-test."""
+        try:
+            group1 = np.array(data.get("group1", []))
+            group2 = np.array(data.get("group2", []))
+            
+            if len(group1) < 2 or len(group2) < 2:
+                return {
+                    "content": "Each group needs at least 2 values",
+                    "is_error": True
+                }
+            
+            statistic, p_value = stats.ttest_ind(group1, group2)
+            significant = p_value < 0.05
+            
+            result = {
+                "test": "Independent t-test",
+                "statistic": float(statistic),
+                "p_value": float(p_value),
+                "significant": significant,
+                "interpretation": f"Groups are {'significantly different' if significant else 'not significantly different'} (p={p_value:.4f})"
+            }
+            
+            return {
+                "content": str(result),
+                "is_error": False
+            }
+        except Exception as e:
+            return {
+                "content": f"Error in t-test: {str(e)}",
                 "is_error": True
             }
