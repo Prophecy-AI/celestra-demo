@@ -1,4 +1,4 @@
-# Agent V4 - Local Interactive REPL
+# Agent V4 - Local Interactive REPL (THIS IS ONLY KEPT HERE FOR DOCUMENTATION AND SHOWING THE EVOLUTION OF AGENT V5 BASED ON CLAUDE CODE SDK)
 
 Interactive research assistant with Claude Code SDK, sandboxed code execution, and direct BigQuery access.
 
