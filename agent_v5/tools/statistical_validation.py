@@ -28,7 +28,7 @@ class StatisticalValidationTool(BaseTool):
                     "operation": {
                         "type": "string",
                         "description": "Operation to perform",
-                        "enum": ["echo", "normality_test", "sample_size_check", "t_test"]
+                        "enum": ["echo", "normality_test", "sample_size_check", "t_test", "mann_whitney"]
                     },
                     "data": {
                         "type": "object",
@@ -76,6 +76,9 @@ class StatisticalValidationTool(BaseTool):
         
         elif operation == "t_test":
             return self._t_test(data)
+        
+        elif operation == "mann_whitney":
+            return self._mann_whitney(data)
         
         return {
             "content": f"Unknown operation: {operation}",
@@ -184,5 +187,40 @@ class StatisticalValidationTool(BaseTool):
         except Exception as e:
             return {
                 "content": f"Error in t-test: {str(e)}",
+                "is_error": True
+            }
+    
+    def _mann_whitney(self, data: Dict) -> Dict:
+        """Perform Mann-Whitney U test (non-parametric alternative to t-test)."""
+        try:
+            group1 = np.array(data.get("group1", []))
+            group2 = np.array(data.get("group2", []))
+            
+            if len(group1) < 2 or len(group2) < 2:
+                return {
+                    "content": "Each group needs at least 2 values",
+                    "is_error": True
+                }
+            
+            # Mann-Whitney U test
+            statistic, p_value = stats.mannwhitneyu(group1, group2, alternative='two-sided')
+            significant = p_value < 0.05
+            
+            result = {
+                "test": "Mann-Whitney U",
+                "statistic": float(statistic),
+                "p_value": float(p_value),
+                "significant": significant,
+                "interpretation": f"Groups are {'significantly different' if significant else 'not significantly different'} (p={p_value:.4f})",
+                "note": "Non-parametric test used (no normality assumption)"
+            }
+            
+            return {
+                "content": str(result),
+                "is_error": False
+            }
+        except Exception as e:
+            return {
+                "content": f"Error in Mann-Whitney U test: {str(e)}",
                 "is_error": True
             }

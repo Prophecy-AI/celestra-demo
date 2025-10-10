@@ -99,3 +99,26 @@ async def test_t_test():
         assert not result["is_error"]
         assert "t-test" in result["content"]
         assert "p_value" in result["content"]
+
+
+@pytest.mark.asyncio
+async def test_mann_whitney():
+    """Test Mann-Whitney U test (non-parametric)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tool = StatisticalValidationTool(tmpdir)
+        
+        # Create two groups with non-normal data (outliers)
+        group1 = [1, 2, 2, 3, 4, 100]  # Outlier in group1
+        group2 = [5, 6, 7, 8, 9, 10]
+        
+        result = await tool.execute({
+            "operation": "mann_whitney",
+            "data": {
+                "group1": group1,
+                "group2": group2
+            }
+        })
+        
+        assert not result["is_error"]
+        assert "Mann-Whitney" in result["content"]
+        assert "Non-parametric" in result["content"]
