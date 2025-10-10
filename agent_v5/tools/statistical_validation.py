@@ -28,7 +28,7 @@ class StatisticalValidationTool(BaseTool):
                     "operation": {
                         "type": "string",
                         "description": "Operation to perform",
-                        "enum": ["echo", "normality_test"]
+                        "enum": ["echo", "normality_test", "sample_size_check"]
                     },
                     "data": {
                         "type": "object",
@@ -37,6 +37,10 @@ class StatisticalValidationTool(BaseTool):
                             "values": {
                                 "type": "array",
                                 "description": "Array of numeric values"
+                            },
+                            "test_type": {
+                                "type": "string",
+                                "description": "Type of statistical test planned"
                             }
                         }
                     }
@@ -58,6 +62,9 @@ class StatisticalValidationTool(BaseTool):
         
         elif operation == "normality_test":
             return self._normality_test(data)
+        
+        elif operation == "sample_size_check":
+            return self._sample_size_check(data)
         
         return {
             "content": f"Unknown operation: {operation}",
@@ -94,5 +101,44 @@ class StatisticalValidationTool(BaseTool):
         except Exception as e:
             return {
                 "content": f"Error in normality test: {str(e)}",
+                "is_error": True
+            }
+    
+    def _sample_size_check(self, data: Dict) -> Dict:
+        """Check if sample size is adequate for planned test."""
+        try:
+            values = data.get("values", [])
+            test_type = data.get("test_type", "parametric")
+            n = len(values) if isinstance(values, list) else values
+            
+            # Define minimum sample size requirements
+            requirements = {
+                "parametric": 30,
+                "t-test": 30,
+                "anova": 20,  # per group
+                "correlation": 10,
+                "regression": 50,
+                "chi-square": 5,  # per cell
+                "non-parametric": 10
+            }
+            
+            min_required = requirements.get(test_type, 30)
+            is_adequate = n >= min_required
+            
+            result = {
+                "sample_size": n,
+                "test_type": test_type,
+                "minimum_required": min_required,
+                "is_adequate": is_adequate,
+                "interpretation": f"Sample size (n={n}) is {'adequate' if is_adequate else 'too small'} for {test_type} test (minimum: {min_required})"
+            }
+            
+            return {
+                "content": str(result),
+                "is_error": False
+            }
+        except Exception as e:
+            return {
+                "content": f"Error in sample size check: {str(e)}",
                 "is_error": True
             }

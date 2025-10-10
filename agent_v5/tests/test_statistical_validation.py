@@ -44,3 +44,34 @@ async def test_normality_test():
         assert not result["is_error"]
         assert "Shapiro-Wilk" in result["content"]
         assert "p_value" in result["content"]
+
+
+@pytest.mark.asyncio
+async def test_sample_size_check():
+    """Test sample size validation."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tool = StatisticalValidationTool(tmpdir)
+        
+        # Test with adequate sample size
+        result = await tool.execute({
+            "operation": "sample_size_check",
+            "data": {
+                "values": list(range(50)),
+                "test_type": "t-test"
+            }
+        })
+        
+        assert not result["is_error"]
+        assert "adequate" in result["content"]
+        
+        # Test with inadequate sample size
+        result = await tool.execute({
+            "operation": "sample_size_check", 
+            "data": {
+                "values": [1, 2, 3],
+                "test_type": "regression"
+            }
+        })
+        
+        assert not result["is_error"]
+        assert "too small" in result["content"]
