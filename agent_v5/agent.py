@@ -13,6 +13,7 @@ from agent_v5.tools.edit import EditTool
 from agent_v5.tools.glob import GlobTool
 from agent_v5.tools.grep import GrepTool
 from agent_v5.tools.todo import TodoWriteTool
+from agent_v5.tools.cohort import CohortDefinitionTool
 
 
 class ResearchAgent:
@@ -37,6 +38,7 @@ class ResearchAgent:
         self.tools.register(GlobTool(self.workspace_dir))
         self.tools.register(GrepTool(self.workspace_dir))
         self.tools.register(TodoWriteTool(self.workspace_dir))
+        self.tools.register(CohortDefinitionTool(self.workspace_dir))
 
     async def run(self, user_message: str) -> AsyncGenerator[Dict, None]:
         """Main agentic loop"""
