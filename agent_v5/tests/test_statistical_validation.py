@@ -122,3 +122,30 @@ async def test_mann_whitney():
         assert not result["is_error"]
         assert "Mann-Whitney" in result["content"]
         assert "Non-parametric" in result["content"]
+
+
+@pytest.mark.asyncio
+async def test_cohen_d():
+    """Test Cohen's d effect size calculation."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tool = StatisticalValidationTool(tmpdir)
+        
+        # Create two groups with known effect size
+        # Mean difference = 2, pooled SD ≈ 1, so d ≈ 2 (large effect)
+        group1 = [1, 2, 3, 4, 5]
+        group2 = [3, 4, 5, 6, 7]
+        
+        result = await tool.execute({
+            "operation": "cohen_d",
+            "data": {
+                "group1": group1,
+                "group2": group2
+            }
+        })
+        
+        assert not result["is_error"]
+        assert "cohen_d" in result["content"]
+        assert "effect size" in result["content"]
+        
+        # With these values, we expect a negative Cohen's d (group2 > group1)
+        assert "group2 > group1" in result["content"]

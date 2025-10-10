@@ -28,7 +28,7 @@ class StatisticalValidationTool(BaseTool):
                     "operation": {
                         "type": "string",
                         "description": "Operation to perform",
-                        "enum": ["echo", "normality_test", "sample_size_check", "t_test", "mann_whitney"]
+                        "enum": ["echo", "normality_test", "sample_size_check", "t_test", "mann_whitney", "cohen_d"]
                     },
                     "data": {
                         "type": "object",
@@ -79,6 +79,9 @@ class StatisticalValidationTool(BaseTool):
         
         elif operation == "mann_whitney":
             return self._mann_whitney(data)
+        
+        elif operation == "cohen_d":
+            return self._cohen_d(data)
         
         return {
             "content": f"Unknown operation: {operation}",
@@ -222,5 +225,58 @@ class StatisticalValidationTool(BaseTool):
         except Exception as e:
             return {
                 "content": f"Error in Mann-Whitney U test: {str(e)}",
+                "is_error": True
+            }
+    
+    def _cohen_d(self, data: Dict) -> Dict:
+        """Calculate Cohen's d effect size for two groups."""
+        try:
+            group1 = np.array(data.get("group1", []))
+            group2 = np.array(data.get("group2", []))
+            
+            if len(group1) < 2 or len(group2) < 2:
+                return {
+                    "content": "Each group needs at least 2 values",
+                    "is_error": True
+                }
+            
+            # Calculate means and standard deviations
+            mean1, mean2 = np.mean(group1), np.mean(group2)
+            std1, std2 = np.std(group1, ddof=1), np.std(group2, ddof=1)
+            n1, n2 = len(group1), len(group2)
+            
+            # Calculate pooled standard deviation
+            pooled_std = np.sqrt(((n1 - 1) * std1**2 + (n2 - 1) * std2**2) / (n1 + n2 - 2))
+            
+            # Calculate Cohen's d
+            d = (mean1 - mean2) / pooled_std if pooled_std > 0 else 0
+            
+            # Interpret effect size
+            abs_d = abs(d)
+            if abs_d < 0.2:
+                interpretation = "negligible"
+            elif abs_d < 0.5:
+                interpretation = "small"
+            elif abs_d < 0.8:
+                interpretation = "medium"
+            else:
+                interpretation = "large"
+            
+            result = {
+                "cohen_d": float(d),
+                "interpretation": f"{interpretation} effect size",
+                "mean1": float(mean1),
+                "mean2": float(mean2),
+                "pooled_std": float(pooled_std),
+                "direction": "group1 > group2" if d > 0 else "group2 > group1"
+            }
+            
+            return {
+                "content": str(result),
+                "is_error": False
+            }
+        except Exception as e:
+            return {
+                "content": f"Error in Cohen's d calculation: {str(e)}",
                 "is_error": True
             }
