@@ -3,7 +3,7 @@
 ## Important Notes
 
 - [Important] This is a very early version of this pipeline, my end goal is to implement a CI/CD like pipeline to run mle-bench (or a subset of it) manually via GitHub Actions on push. Currently your changes to the agent aren't automatically reflected in this agent. **You have to `git pull` on the server's `research/canada-research` path before testing to apply your changes from remote.**
-
+- [Important] The `RUN_AGENT_V5_KAGGLE` script reads from `experiments/splits/custom-set.txt` to determine what competitions are in the test set. Please make sure there are not conflicts with other people when modifying this file.
 
 - You can do all these steps either from terminal or first ssh via VSCode and then use VSCode's terminal
 - The agent uses GPU resources, so coordinate with teammates to avoid conflicts
