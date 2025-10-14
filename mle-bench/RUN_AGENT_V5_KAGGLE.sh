@@ -1,6 +1,12 @@
 #!/bin/bash
 # Build and run agent_v5_kaggle
 # Must be run from the mle-bench directory
+#
+# Production-grade CI/CD implementation with:
+# - Foreground execution (no race conditions)
+# - Signal handlers (cleanup on cancel/Ctrl+C)
+# - Container tracking and cleanup
+# - Proper error handling
 
 set -e  # Exit on error
 
@@ -35,6 +41,48 @@ export SUBMISSION_DIR="${SUBMISSION_DIR:-/home/submission}"
 export LOGS_DIR="${LOGS_DIR:-/home/logs}"
 export CODE_DIR="${CODE_DIR:-/home/code}"
 export AGENT_DIR="${AGENT_DIR:-/home/agent}"
+
+# Temporary config file (cleaned up by trap)
+TMP_CONFIG=""
+
+# === CLEANUP FUNCTION ===
+cleanup() {
+    local EXIT_CODE=$?
+
+    echo ""
+    echo "🧹 Cleanup triggered (exit code: $EXIT_CODE)"
+
+    # Clean up temp config
+    if [ -n "$TMP_CONFIG" ] && [ -f "$TMP_CONFIG" ]; then
+        rm -f "$TMP_CONFIG"
+        echo "   Removed temp config: $TMP_CONFIG"
+    fi
+
+    # Call cleanup script to kill containers
+    CLEANUP_SCRIPT="$(dirname "$0")/../scripts/cleanup-containers.sh"
+    if [ -f "$CLEANUP_SCRIPT" ]; then
+        echo "   Running cleanup script..."
+        bash "$CLEANUP_SCRIPT" || true
+    else
+        echo "   ⚠️  Cleanup script not found: $CLEANUP_SCRIPT"
+        # Fallback: manual cleanup
+        if [ -n "$RUN_ID" ]; then
+            echo "   Attempting manual cleanup for run_id=$RUN_ID"
+            CONTAINERS=$(docker ps -q --filter "label=run_id=$RUN_ID" 2>/dev/null || true)
+            if [ -n "$CONTAINERS" ]; then
+                docker stop $CONTAINERS 2>/dev/null || true
+                docker rm $CONTAINERS 2>/dev/null || true
+            fi
+        fi
+    fi
+
+    echo "✅ Cleanup complete"
+    exit $EXIT_CODE
+}
+
+# === REGISTER SIGNAL HANDLERS ===
+# Cleanup on normal exit, Ctrl+C, kill, or term signal
+trap cleanup EXIT INT TERM
 
 echo "=========================================="
 echo "Agent V5 Kaggle - Build & Run"
@@ -154,9 +202,9 @@ echo "=========================================="
 echo "Step 3: Run Agent"
 echo "=========================================="
 
-# Create temporary container config with GPU properly attached
+# Create temporary container config with GPU and labels
 TMP_CONFIG=$(mktemp /tmp/container_config_XXXXXX.json)
-cat > "$TMP_CONFIG" << 'EOF'
+cat > "$TMP_CONFIG" <<EOF
 {
     "mem_limit": "80G",
     "shm_size": "16G",
@@ -164,7 +212,8 @@ cat > "$TMP_CONFIG" << 'EOF'
     "gpus": -1,
     "labels": {
         "run_id": "${RUN_ID}",
-        "workflow": "mle-bench"
+        "workflow": "mle-bench",
+        "image_tag": "${IMAGE_TAG}"
     }
 }
 EOF
@@ -180,52 +229,29 @@ if [ "$DRY_RUN" = "true" ]; then
     echo "   Config: $TMP_CONFIG"
     echo ""
     echo "✅ DRY RUN COMPLETE - No actual execution performed"
-    rm -f "$TMP_CONFIG"
+    # Cleanup handled by trap
     exit 0
 fi
 
-# Run the agent in the background
-python run_agent.py \
---agent-id "${AGENT_ID}" \
---competition-set experiments/splits/custom-set.txt \
---container-config "$TMP_CONFIG" &
+# === RUN AGENT IN FOREGROUND ===
+# This is the key change: no background execution, no race conditions
+# Python's stdout/stderr stream directly to our stdout
+# Logs appear in real-time without docker exec hacks
+# Cleanup trap handles containers on any exit (normal, Ctrl+C, cancel)
 
-AGENT_PID=$!
-
-# Wait a moment for the container to start
-sleep 10
-
-# Get the latest running container
-CONTAINER_ID=$(docker ps --latest --format "{{.ID}}")
-
-if [ -n "$CONTAINER_ID" ]; then
-    echo "Container started: $CONTAINER_ID"
-    echo "Waiting for agent.log to be created..."
-
-    # Wait for agent.log to exist (max 60 seconds)
-    for i in {1..60}; do
-        if docker exec "$CONTAINER_ID" test -f /home/logs/agent.log 2>/dev/null; then
-            echo "✅ agent.log found, streaming logs..."
-            break
-        fi
-        sleep 1
-        echo -n "."
-    done
-    echo ""
-
-    # Tail the agent log file
-    docker exec "$CONTAINER_ID" tail -f /home/logs/agent.log 2>&1 || true
-else
-    echo "⚠️  No container found, waiting for agent process..."
-fi
-
-# Wait for the background python process to complete
-wait $AGENT_PID
-
+echo "Starting agent (foreground execution)..."
+echo "Logs will stream in real-time..."
 echo ""
-echo "Agent process completed"
-# Clean up temporary config
-rm -f "$TMP_CONFIG"
+
+# Use -u for unbuffered output (real-time log streaming)
+python -u run_agent.py \
+  --agent-id "${AGENT_ID}" \
+  --competition-set experiments/splits/custom-set.txt \
+  --container-config "$TMP_CONFIG"
+
+# If we reach here, agent completed successfully
+echo ""
+echo "✅ Agent process completed successfully"
 
 echo ""
 echo "=========================================="
@@ -233,7 +259,7 @@ echo "Step 4: Check Results"
 echo "=========================================="
 
 # Find latest run
-RUN_GROUP=$(ls -t runs/ | head -1)
+RUN_GROUP=$(ls -t runs/ 2>/dev/null | head -1)
 
 if [ -z "$RUN_GROUP" ]; then
     echo "❌ ERROR: No run results found in runs/"
@@ -249,7 +275,7 @@ ls -la "runs/$RUN_GROUP/" | head -20
 echo ""
 
 # Check if grading already happened
-GRADING_REPORT=$(find "runs/$RUN_GROUP/" -name "*_grading_report.json" -o -name "results.json" | head -1)
+GRADING_REPORT=$(find "runs/$RUN_GROUP/" -name "*_grading_report.json" -o -name "results.json" 2>/dev/null | head -1)
 if [ -n "$GRADING_REPORT" ]; then
     echo "✅ Grading already complete"
     echo "   Report: $GRADING_REPORT"
@@ -274,7 +300,7 @@ else
       --output-dir runs/$RUN_GROUP
 
     # Find the grading report
-    GRADING_REPORT=$(find "runs/$RUN_GROUP/" -name "*_grading_report.json" -o -name "results.json" | head -1)
+    GRADING_REPORT=$(find "runs/$RUN_GROUP/" -name "*_grading_report.json" -o -name "results.json" 2>/dev/null | head -1)
 fi
 
 echo ""
@@ -285,7 +311,7 @@ echo "Results in: runs/$RUN_GROUP/"
 echo ""
 
 # Find the actual competition directory
-COMP_DIR=$(find "runs/$RUN_GROUP/" -maxdepth 1 -type d ! -name "$(basename runs/$RUN_GROUP)" | head -1)
+COMP_DIR=$(find "runs/$RUN_GROUP/" -maxdepth 1 -type d ! -name "$(basename runs/$RUN_GROUP)" 2>/dev/null | head -1)
 
 if [ -n "$COMP_DIR" ]; then
     COMP_NAME=$(basename "$COMP_DIR")

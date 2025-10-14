@@ -45,11 +45,21 @@ async def worker(
 
         # Create logger for the run
         run_logger = get_logger(str(task.path_to_run))
+
+        # Add file handler (writes to run.log)
         log_file_handler = logging.FileHandler(task.path_to_run / "run.log")
         log_file_handler.setFormatter(
             logging.getLogger().handlers[0].formatter
         )  # match the formatting we have
         run_logger.addHandler(log_file_handler)
+
+        # Add stream handler (writes to stdout for real-time viewing)
+        log_stream_handler = logging.StreamHandler()
+        log_stream_handler.setFormatter(
+            logging.getLogger().handlers[0].formatter
+        )
+        run_logger.addHandler(log_stream_handler)
+
         run_logger.propagate = False
 
         run_logger.info(

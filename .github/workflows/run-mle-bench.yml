@@ -118,6 +118,7 @@ jobs:
           echo "   mlebench: $(python -c 'import mlebench; print(mlebench.__file__)')"
 
       - name: Run MLE-Bench
+        timeout-minutes: 1400  # 23.3 hours (slightly less than job timeout for cleanup)
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           IMAGE_TAG: agent_v5_kaggle:run-${{ github.run_id }}
@@ -137,7 +138,9 @@ jobs:
           echo "  Python: $(which python)"
           echo ""
 
-          # Run the script
+          # Run the script (foreground execution with trap handlers)
+          # Logs will stream in real-time
+          # Ctrl+C or cancellation will trigger cleanup automatically
           ./RUN_AGENT_V5_KAGGLE.sh
 
       - name: Upload results
@@ -194,19 +197,19 @@ jobs:
 
       - name: Cleanup Docker
         if: always()
+        env:
+          RUN_ID: ${{ github.run_id }}
         run: |
-          echo "Cleaning up Docker resources..."
+          echo "=========================================="
+          echo "Docker Cleanup"
+          echo "=========================================="
 
-          # Kill any running containers from this run (by label)
-          echo "Stopping containers for run ID: ${{ github.run_id }}..."
-          RUNNING_CONTAINERS=$(docker ps -q --filter "label=run_id=${{ github.run_id }}")
-          if [ -n "$RUNNING_CONTAINERS" ]; then
-            echo "Found running containers: $RUNNING_CONTAINERS"
-            docker stop $RUNNING_CONTAINERS || true
-            docker rm $RUNNING_CONTAINERS || true
-          else
-            echo "No running containers found for this run"
-          fi
+          # Use cleanup script (idempotent, safe to run multiple times)
+          cd ${{ github.workspace }}
+          bash scripts/cleanup-containers.sh || true
+
+          echo ""
+          echo "Cleaning up Docker images..."
 
           # Remove the specific image we built
           docker image rm agent_v5_kaggle:run-${{ github.run_id }} 2>/dev/null || true
