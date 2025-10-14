@@ -10,7 +10,7 @@ import sys
 AGENT_DIR = os.environ.get('AGENT_DIR', '/home/agent')
 sys.path.insert(0, AGENT_DIR)
 
-from agent_v5.kaggle_agent import KaggleAgent
+from kaggle_agent import KaggleAgent
 from debug import log
 
 
