@@ -114,7 +114,7 @@ if [ "$DRY_RUN" = "true" ]; then
 else
     for line in $(cat experiments/splits/custom-set.txt); do
         echo "Preparing: $line"
-        python -m mlebench prepare -c $line
+        mlebench prepare -c $line
     done
 
     git lfs pull
@@ -203,7 +203,7 @@ python experiments/make_submission.py \
   --output runs/$RUN_GROUP/submission.jsonl
 
 # Grade
-python -m mlebench grade \
+mlebench grade \
   --submission runs/$RUN_GROUP/submission.jsonl \
   --output-dir runs/$RUN_GROUP
 
