@@ -30,6 +30,7 @@ fi
 IMAGE_TAG="${IMAGE_TAG:-agent_v5_kaggle:latest}"
 AGENT_ID="${AGENT_ID:-agent_v5_kaggle}"  # Agent registry ID (no Docker tag)
 DRY_RUN="${DRY_RUN:-false}"
+RUN_ID="${RUN_ID:-local}"  # GitHub run ID for tracking containers
 export SUBMISSION_DIR="${SUBMISSION_DIR:-/home/submission}"
 export LOGS_DIR="${LOGS_DIR:-/home/logs}"
 export CODE_DIR="${CODE_DIR:-/home/code}"
@@ -41,6 +42,7 @@ echo "=========================================="
 echo "Working directory: $(pwd)"
 echo "Docker image: $IMAGE_TAG"
 echo "Agent ID: $AGENT_ID"
+echo "Run ID: $RUN_ID"
 echo "Dry run mode: $DRY_RUN"
 echo ""
 
@@ -154,12 +156,16 @@ echo "=========================================="
 
 # Create temporary container config with GPU properly attached
 TMP_CONFIG=$(mktemp /tmp/container_config_XXXXXX.json)
-cat > "$TMP_CONFIG" << 'EOF'
+cat > "$TMP_CONFIG" <<EOF
 {
     "mem_limit": "80G",
     "shm_size": "16G",
     "nano_cpus": 8e9,
-    "gpus": -1
+    "gpus": -1,
+    "labels": {
+        "run_id": "${RUN_ID}",
+        "workflow": "mle-bench"
+    }
 }
 EOF
 

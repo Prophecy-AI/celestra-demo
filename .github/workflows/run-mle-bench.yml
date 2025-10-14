@@ -121,6 +121,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           IMAGE_TAG: agent_v5_kaggle:run-${{ github.run_id }}
+          RUN_ID: ${{ github.run_id }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
           cd mle-bench
@@ -131,6 +132,7 @@ jobs:
           echo "Starting MLE-Bench with:"
           echo "  Working directory: $(pwd)"
           echo "  IMAGE_TAG: $IMAGE_TAG"
+          echo "  RUN_ID: $RUN_ID"
           echo "  DRY_RUN: $DRY_RUN"
           echo "  Python: $(which python)"
           echo ""
@@ -195,9 +197,9 @@ jobs:
         run: |
           echo "Cleaning up Docker resources..."
 
-          # Kill any running containers from this run
-          echo "Stopping containers for this run..."
-          RUNNING_CONTAINERS=$(docker ps -q --filter "ancestor=agent_v5_kaggle:run-${{ github.run_id }}")
+          # Kill any running containers from this run (by label)
+          echo "Stopping containers for run ID: ${{ github.run_id }}..."
+          RUNNING_CONTAINERS=$(docker ps -q --filter "label=run_id=${{ github.run_id }}")
           if [ -n "$RUNNING_CONTAINERS" ]; then
             echo "Found running containers: $RUNNING_CONTAINERS"
             docker stop $RUNNING_CONTAINERS || true
