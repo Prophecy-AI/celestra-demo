@@ -118,7 +118,7 @@ jobs:
 
       - name: Upload results
         if: always() && github.event.inputs.dry_run == 'false'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: mle-bench-results-${{ github.ref_name }}-run${{ github.run_number }}
           path: ${{ github.workspace }}/mle-bench/runs/
@@ -126,7 +126,7 @@ jobs:
 
       - name: Upload grading report
         if: always() && github.event.inputs.dry_run == 'false'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: grading-report-${{ github.ref_name }}-run${{ github.run_number }}
           path: |
