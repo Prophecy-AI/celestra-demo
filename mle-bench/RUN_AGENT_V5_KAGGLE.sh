@@ -53,12 +53,23 @@ fi
 
 echo "✅ ANTHROPIC_API_KEY is set"
 
-# Check if mlebench is installed, if not install it
+# Check if mlebench is installed
 if ! python -c "import mlebench" 2>/dev/null; then
     echo ""
-    echo "⚠️  mlebench not installed, installing..."
-    pip install -e . --quiet
-    echo "✅ mlebench installed"
+    echo "⚠️  mlebench not installed"
+
+    # Only auto-install if we're in a virtual environment
+    if [ -n "$VIRTUAL_ENV" ]; then
+        echo "   Installing in virtual environment..."
+        pip install -e . --quiet
+        echo "✅ mlebench installed"
+    else
+        echo "❌ ERROR: mlebench not found and not in a virtual environment"
+        echo "   Please run one of:"
+        echo "     1. cd mle-bench && python3 -m venv venv && source venv/bin/activate && pip install -e ."
+        echo "     2. pip install -e . --break-system-packages (not recommended)"
+        exit 1
+    fi
 fi
 
 echo ""

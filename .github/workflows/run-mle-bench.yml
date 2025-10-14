@@ -98,22 +98,44 @@ jobs:
           echo "Competitions to run:"
           cat custom-set.txt
 
+      - name: Setup Python environment
+        run: |
+          cd mle-bench
+
+          # Create venv if it doesn't exist
+          if [ ! -d "venv" ]; then
+            echo "Creating virtual environment..."
+            python3 -m venv venv
+          fi
+
+          # Activate venv and install mlebench
+          source venv/bin/activate
+          echo "Installing mlebench..."
+          pip install -e . --quiet
+
+          echo "✅ Python environment ready"
+          echo "   Python: $(which python)"
+          echo "   mlebench: $(python -c 'import mlebench; print(mlebench.__file__)')"
+
       - name: Run MLE-Bench
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          WORK_DIR: ${{ github.workspace }}/mle-bench
           IMAGE_TAG: agent_v5_kaggle:run-${{ github.run_id }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
           cd mle-bench
 
+          # Activate venv
+          source venv/bin/activate
+
           echo "Starting MLE-Bench with:"
-          echo "  WORK_DIR: $WORK_DIR"
+          echo "  Working directory: $(pwd)"
           echo "  IMAGE_TAG: $IMAGE_TAG"
           echo "  DRY_RUN: $DRY_RUN"
+          echo "  Python: $(which python)"
           echo ""
 
-          # Run the script with environment variables
+          # Run the script
           ./RUN_AGENT_V5_KAGGLE.sh
 
       - name: Upload results
