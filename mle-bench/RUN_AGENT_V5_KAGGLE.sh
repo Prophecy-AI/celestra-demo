@@ -53,6 +53,14 @@ fi
 
 echo "✅ ANTHROPIC_API_KEY is set"
 
+# Check if mlebench is installed, if not install it
+if ! python -c "import mlebench" 2>/dev/null; then
+    echo ""
+    echo "⚠️  mlebench not installed, installing..."
+    pip install -e . --quiet
+    echo "✅ mlebench installed"
+fi
+
 echo ""
 echo "=========================================="
 echo "Step 1: Build Docker Images"
