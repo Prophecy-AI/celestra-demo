@@ -5,7 +5,7 @@
 set -e  # Exit on error
 
 # === CONFIGURATION (can be overridden via environment variables) ===
-WORK_DIR="${WORK_DIR:-/home/ubuntu/research/canada-research/mle-bench}"
+WORK_DIR="${WORK_DIR:-$(pwd)}"
 IMAGE_TAG="${IMAGE_TAG:-agent_v5_kaggle:latest}"
 DRY_RUN="${DRY_RUN:-false}"
 export SUBMISSION_DIR="${SUBMISSION_DIR:-/home/submission}"
