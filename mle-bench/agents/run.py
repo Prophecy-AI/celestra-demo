@@ -59,8 +59,21 @@ def execute_agent(container: Container, agent: Agent, logger: logging.Logger):
     logger.info("Running agent...")
     exit_code, output = container.exec_run(cmd, stream=True, user="nonroot")
 
+    # Buffer for accumulating partial lines (chunks are arbitrary byte boundaries)
+    buffer = ""
     for chunk in output:
-        logger.info(f"[Container] {chunk.decode('utf-8').strip()}")
+        # Decode chunk and add to buffer
+        buffer += chunk.decode('utf-8')
+
+        # Split on newlines and log complete lines
+        while '\n' in buffer:
+            line, buffer = buffer.split('\n', 1)
+            if line.strip():  # Don't log empty lines
+                logger.info(f"[Container] {line}")
+
+    # Log any remaining content (last line without newline)
+    if buffer.strip():
+        logger.info(f"[Container] {buffer}")
 
 
 def clean_up(container: Container, logger: logging.Logger, retain: bool = False) -> bool:
