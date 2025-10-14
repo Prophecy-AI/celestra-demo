@@ -27,7 +27,7 @@ echo ""
 
 # Prompt for GitHub token
 echo "To get your GitHub token:"
-echo "1. Go to: https://github.com/YOUR_ORG/canada-research/settings/actions/runners/new"
+echo "1. Go to: https://github.com/Prophecy-AI/canada-research/settings/actions/runners/new"
 echo "2. Select Linux + x64"
 echo "3. Copy the token from the './config.sh' command"
 echo ""
@@ -105,7 +105,7 @@ fi
 if [ ! -f ".runner" ]; then
     echo "Configuring runner..."
     ./config.sh \
-        --url https://github.com/YOUR_ORG/canada-research \
+        --url https://github.com/Prophecy-AI/canada-research \
         --token "$GITHUB_TOKEN" \
         --name "$RUNNER_NAME" \
         --labels "$RUNNER_LABELS" \
@@ -183,7 +183,7 @@ echo "  Labels: $RUNNER_LABELS"
 echo "  Directory: $RUNNER_DIR"
 echo ""
 echo "Next steps:"
-echo "1. Go to: https://github.com/YOUR_ORG/canada-research/settings/actions/runners"
+echo "1. Go to: https://github.com/Prophecy-AI/canada-research/settings/actions/runners"
 echo "2. Verify you see: $RUNNER_NAME (Idle)"
 echo "3. Repeat this script on the other GPU machine"
 echo "4. Add ANTHROPIC_API_KEY to GitHub repo secrets"
