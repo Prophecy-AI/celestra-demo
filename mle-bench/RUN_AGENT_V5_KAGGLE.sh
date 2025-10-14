@@ -1,11 +1,22 @@
 #!/bin/bash
 # Build and run agent_v5_kaggle
-# Supports: GitHub Actions workspaces, custom paths, unique Docker tags, dry run mode
+# Must be run from the mle-bench directory
 
 set -e  # Exit on error
 
+# === VALIDATE WE'RE IN THE RIGHT DIRECTORY ===
+if [ ! -f "environment/Dockerfile" ]; then
+    echo "❌ ERROR: Must run this script from the mle-bench directory"
+    echo "   Expected to find: environment/Dockerfile"
+    echo "   Current directory: $(pwd)"
+    echo ""
+    echo "Usage:"
+    echo "  cd /path/to/mle-bench"
+    echo "  ./RUN_AGENT_V5_KAGGLE.sh"
+    exit 1
+fi
+
 # === CONFIGURATION (can be overridden via environment variables) ===
-WORK_DIR="${WORK_DIR:-$(pwd)}"
 IMAGE_TAG="${IMAGE_TAG:-agent_v5_kaggle:latest}"
 DRY_RUN="${DRY_RUN:-false}"
 export SUBMISSION_DIR="${SUBMISSION_DIR:-/home/submission}"
@@ -16,7 +27,7 @@ export AGENT_DIR="${AGENT_DIR:-/home/agent}"
 echo "=========================================="
 echo "Agent V5 Kaggle - Build & Run"
 echo "=========================================="
-echo "Work directory: $WORK_DIR"
+echo "Working directory: $(pwd)"
 echo "Docker image: $IMAGE_TAG"
 echo "Dry run mode: $DRY_RUN"
 echo ""
@@ -32,11 +43,28 @@ echo "✅ ANTHROPIC_API_KEY is set"
 
 echo ""
 echo "=========================================="
-echo "Step 1: Build Docker Image"
+echo "Step 1: Build Docker Images"
 echo "=========================================="
 
-# Change to work directory
-cd "$WORK_DIR"
+# Check if base mlebench-env image exists
+if ! docker image inspect mlebench-env:latest >/dev/null 2>&1; then
+    echo "Building base image 'mlebench-env'..."
+    echo ""
+
+    if [ "$DRY_RUN" = "true" ]; then
+        echo "🔍 DRY RUN: Would build mlebench-env base image"
+    else
+        docker build --platform=linux/amd64 -t mlebench-env -f environment/Dockerfile .
+        echo "✅ Base image mlebench-env built successfully"
+    fi
+    echo ""
+else
+    echo "✅ Base image mlebench-env already exists"
+    echo ""
+fi
+
+# Build agent_v5_kaggle image
+echo "Building agent_v5_kaggle image..."
 
 if [ "$DRY_RUN" = "true" ]; then
     echo "🔍 DRY RUN: Would build Docker image with:"
@@ -56,7 +84,7 @@ echo ""
 if [ "$DRY_RUN" = "true" ]; then
     echo "🔍 DRY RUN: Image build skipped"
 else
-    echo "✅ Docker image built successfully"
+    echo "✅ Agent image built successfully"
 fi
 
 echo ""
