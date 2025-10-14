@@ -227,3 +227,18 @@ unique-bonbon-472921-q8-7fc568e0f2a7.json
 outputs/
 workspace/
 mle-bench/.git
+
+# GitHub Actions Runner
+actions-runner*/
+.runner
+.credentials
+.credentials_rsaparams
+
+# MLE-Bench runs and artifacts
+mle-bench/runs/
+mle-bench/data/
+*.tar.gz
+
+# Temporary files
+/tmp/
+*.tmp

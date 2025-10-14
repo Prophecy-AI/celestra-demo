@@ -1,11 +1,25 @@
 #!/bin/bash
-# Quick script to build and run agent_v5_kaggle on spaceship-titanic
+# Build and run agent_v5_kaggle
+# Supports: GitHub Actions workspaces, custom paths, unique Docker tags, dry run mode
 
 set -e  # Exit on error
+
+# === CONFIGURATION (can be overridden via environment variables) ===
+WORK_DIR="${WORK_DIR:-/home/ubuntu/research/canada-research/mle-bench}"
+IMAGE_TAG="${IMAGE_TAG:-agent_v5_kaggle:latest}"
+DRY_RUN="${DRY_RUN:-false}"
+export SUBMISSION_DIR="${SUBMISSION_DIR:-/home/submission}"
+export LOGS_DIR="${LOGS_DIR:-/home/logs}"
+export CODE_DIR="${CODE_DIR:-/home/code}"
+export AGENT_DIR="${AGENT_DIR:-/home/agent}"
 
 echo "=========================================="
 echo "Agent V5 Kaggle - Build & Run"
 echo "=========================================="
+echo "Work directory: $WORK_DIR"
+echo "Docker image: $IMAGE_TAG"
+echo "Dry run mode: $DRY_RUN"
+echo ""
 
 # Check API key
 if [ -z "$ANTHROPIC_API_KEY" ]; then
@@ -16,32 +30,61 @@ fi
 
 echo "✅ ANTHROPIC_API_KEY is set"
 
-# Set build arguments
-export SUBMISSION_DIR=/home/submission
-export LOGS_DIR=/home/logs
-export CODE_DIR=/home/code
-export AGENT_DIR=/home/agent
-
 echo ""
 echo "=========================================="
 echo "Step 1: Build Docker Image"
 echo "=========================================="
 
-cd /home/ubuntu/research/canada-research/mle-bench
+# Change to work directory
+cd "$WORK_DIR"
 
-docker build --platform=linux/amd64 -t agent_v5_kaggle \
-  agents/agent_v5_kaggle/ \
-  --build-arg SUBMISSION_DIR=$SUBMISSION_DIR \
-  --build-arg LOGS_DIR=$LOGS_DIR \
-  --build-arg CODE_DIR=$CODE_DIR \
-  --build-arg AGENT_DIR=$AGENT_DIR
+if [ "$DRY_RUN" = "true" ]; then
+    echo "🔍 DRY RUN: Would build Docker image with:"
+    echo "   Tag: $IMAGE_TAG"
+    echo "   Context: agents/agent_v5_kaggle/"
+    echo "   Platform: linux/amd64"
+else
+    docker build --platform=linux/amd64 -t "$IMAGE_TAG" \
+      agents/agent_v5_kaggle/ \
+      --build-arg SUBMISSION_DIR=$SUBMISSION_DIR \
+      --build-arg LOGS_DIR=$LOGS_DIR \
+      --build-arg CODE_DIR=$CODE_DIR \
+      --build-arg AGENT_DIR=$AGENT_DIR
+fi
 
 echo ""
-echo "✅ Docker image built successfully"
+if [ "$DRY_RUN" = "true" ]; then
+    echo "🔍 DRY RUN: Image build skipped"
+else
+    echo "✅ Docker image built successfully"
+fi
 
 echo ""
 echo "=========================================="
-echo "Step 2: Run on a competition"
+echo "Step 2: Prepare Competitions"
+echo "=========================================="
+
+if [ "$DRY_RUN" = "true" ]; then
+    echo "🔍 DRY RUN: Would prepare competitions from:"
+    echo "   experiments/splits/custom-set.txt"
+    if [ -f experiments/splits/custom-set.txt ]; then
+        echo "   Competitions:"
+        cat experiments/splits/custom-set.txt | sed 's/^/   - /'
+    fi
+    echo ""
+    echo "🔍 DRY RUN: Would pull git lfs files"
+else
+    for line in $(cat experiments/splits/custom-set.txt); do
+        echo "Preparing: $line"
+        mlebench prepare -c $line
+    done
+
+    git lfs pull
+fi
+
+echo ""
+echo "=========================================="
+echo "Step 3: Run Agent"
 echo "=========================================="
 
 # Create temporary container config with GPU properly attached
@@ -55,18 +98,24 @@ cat > "$TMP_CONFIG" << 'EOF'
 }
 EOF
 
-echo "Using temporary GPU config: $TMP_CONFIG"
+echo "Using container config: $TMP_CONFIG"
 cat "$TMP_CONFIG"
+echo ""
 
-for line in $(cat experiments/splits/custom-set.txt); do
-	mlebench prepare -c $line
-done
-
-git lfs pull
+if [ "$DRY_RUN" = "true" ]; then
+    echo "🔍 DRY RUN: Would run agent with:"
+    echo "   Agent ID: ${IMAGE_TAG}"
+    echo "   Competition set: experiments/splits/custom-set.txt"
+    echo "   Config: $TMP_CONFIG"
+    echo ""
+    echo "✅ DRY RUN COMPLETE - No actual execution performed"
+    rm -f "$TMP_CONFIG"
+    exit 0
+fi
 
 # Run the agent in the background
 python run_agent.py \
---agent-id agent_v5_kaggle \
+--agent-id "${IMAGE_TAG}" \
 --competition-set experiments/splits/custom-set.txt \
 --container-config "$TMP_CONFIG" &
 
@@ -78,19 +127,26 @@ sleep 10
 # Get the latest running container
 CONTAINER_ID=$(docker ps --latest --format "{{.ID}}")
 
-# Tail the logs (this will follow until the container stops)
-docker exec "$CONTAINER_ID" tail -f /home/logs/agent.log
+if [ -n "$CONTAINER_ID" ]; then
+    echo "Container started: $CONTAINER_ID"
+    echo "Tailing logs..."
+    # Tail the logs (this will follow until the container stops)
+    docker exec "$CONTAINER_ID" tail -f /home/logs/agent.log || true
+else
+    echo "⚠️  No container found, waiting for agent process..."
+fi
 
 # Wait for the background python process to complete
 wait $AGENT_PID
 
-echo "Both processes completed"
+echo ""
+echo "Agent process completed"
 # Clean up temporary config
 rm -f "$TMP_CONFIG"
 
 echo ""
 echo "=========================================="
-echo "Step 3: Check Results"
+echo "Step 4: Check Results"
 echo "=========================================="
 
 # Find latest run
@@ -100,7 +156,7 @@ echo ""
 
 echo ""
 echo "=========================================="
-echo "Step 4: Grade Submission"
+echo "Step 5: Grade Submission"
 echo "=========================================="
 
 # Generate submission JSONL
