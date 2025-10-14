@@ -156,7 +156,7 @@ echo "=========================================="
 
 # Create temporary container config with GPU properly attached
 TMP_CONFIG=$(mktemp /tmp/container_config_XXXXXX.json)
-cat > "$TMP_CONFIG" <<EOF
+cat > "$TMP_CONFIG" << 'EOF'
 {
     "mem_limit": "80G",
     "shm_size": "16G",
