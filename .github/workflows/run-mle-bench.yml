@@ -195,6 +195,17 @@ jobs:
         run: |
           echo "Cleaning up Docker resources..."
 
+          # Kill any running containers from this run
+          echo "Stopping containers for this run..."
+          RUNNING_CONTAINERS=$(docker ps -q --filter "ancestor=agent_v5_kaggle:run-${{ github.run_id }}")
+          if [ -n "$RUNNING_CONTAINERS" ]; then
+            echo "Found running containers: $RUNNING_CONTAINERS"
+            docker stop $RUNNING_CONTAINERS || true
+            docker rm $RUNNING_CONTAINERS || true
+          else
+            echo "No running containers found for this run"
+          fi
+
           # Remove the specific image we built
           docker image rm agent_v5_kaggle:run-${{ github.run_id }} 2>/dev/null || true
 

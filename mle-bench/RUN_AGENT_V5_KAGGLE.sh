@@ -194,9 +194,9 @@ CONTAINER_ID=$(docker ps --latest --format "{{.ID}}")
 
 if [ -n "$CONTAINER_ID" ]; then
     echo "Container started: $CONTAINER_ID"
-    echo "Tailing logs..."
-    # Tail the logs (this will follow until the container stops)
-    docker exec "$CONTAINER_ID" tail -f /home/logs/agent.log || true
+    echo "Tailing container logs..."
+    # Follow container logs directly (stdout/stderr from agent)
+    docker logs -f "$CONTAINER_ID" 2>&1 || true
 else
     echo "⚠️  No container found, waiting for agent process..."
 fi
