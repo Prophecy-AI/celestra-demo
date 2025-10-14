@@ -28,6 +28,7 @@ fi
 
 # === CONFIGURATION (can be overridden via environment variables) ===
 IMAGE_TAG="${IMAGE_TAG:-agent_v5_kaggle:latest}"
+AGENT_ID="${AGENT_ID:-agent_v5_kaggle}"  # Agent registry ID (no Docker tag)
 DRY_RUN="${DRY_RUN:-false}"
 export SUBMISSION_DIR="${SUBMISSION_DIR:-/home/submission}"
 export LOGS_DIR="${LOGS_DIR:-/home/logs}"
@@ -39,6 +40,7 @@ echo "Agent V5 Kaggle - Build & Run"
 echo "=========================================="
 echo "Working directory: $(pwd)"
 echo "Docker image: $IMAGE_TAG"
+echo "Agent ID: $AGENT_ID"
 echo "Dry run mode: $DRY_RUN"
 echo ""
 
@@ -142,7 +144,7 @@ echo ""
 
 if [ "$DRY_RUN" = "true" ]; then
     echo "🔍 DRY RUN: Would run agent with:"
-    echo "   Agent ID: ${IMAGE_TAG}"
+    echo "   Agent ID: ${AGENT_ID}"
     echo "   Competition set: experiments/splits/custom-set.txt"
     echo "   Config: $TMP_CONFIG"
     echo ""
@@ -153,7 +155,7 @@ fi
 
 # Run the agent in the background
 python run_agent.py \
---agent-id "${IMAGE_TAG}" \
+--agent-id "${AGENT_ID}" \
 --competition-set experiments/splits/custom-set.txt \
 --container-config "$TMP_CONFIG" &
 
