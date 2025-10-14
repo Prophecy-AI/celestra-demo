@@ -81,15 +81,21 @@ echo "Building agent_v5_kaggle image..."
 if [ "$DRY_RUN" = "true" ]; then
     echo "🔍 DRY RUN: Would build Docker image with:"
     echo "   Tag: $IMAGE_TAG"
-    echo "   Context: agents/agent_v5_kaggle/"
+    echo "   Context: .. (canada-research root, to resolve symlinks)"
+    echo "   Dockerfile: mle-bench/agents/agent_v5_kaggle/Dockerfile"
     echo "   Platform: linux/amd64"
 else
+    # Build from parent directory (canada-research) to resolve symlinks
+    # The symlinks in agent_v5_kaggle/ point to ../../../agent_v5, etc.
+    cd ..
     docker build --platform=linux/amd64 -t "$IMAGE_TAG" \
-      agents/agent_v5_kaggle/ \
+      -f mle-bench/agents/agent_v5_kaggle/Dockerfile \
+      . \
       --build-arg SUBMISSION_DIR=$SUBMISSION_DIR \
       --build-arg LOGS_DIR=$LOGS_DIR \
       --build-arg CODE_DIR=$CODE_DIR \
       --build-arg AGENT_DIR=$AGENT_DIR
+    cd mle-bench
 fi
 
 echo ""

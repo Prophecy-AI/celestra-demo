@@ -16,7 +16,7 @@ RUN mkdir -p ${LOGS_DIR} ${CODE_DIR} ${AGENT_DIR}
 ARG CONDA_ENV_NAME=agent
 
 # Copy requirements first (for Docker layer caching)
-COPY requirements.txt ${AGENT_DIR}/requirements.txt
+COPY mle-bench/agents/agent_v5_kaggle/requirements.txt ${AGENT_DIR}/requirements.txt
 
 # Install agent dependencies
 RUN conda run -n ${CONDA_ENV_NAME} pip install -r ${AGENT_DIR}/requirements.txt && \
@@ -48,8 +48,13 @@ RUN conda run -n ${CONDA_ENV_NAME} pip install \
     tensorflow>=2.13.0 \
     && conda clean -afy
 
-# Copy all agent files
-COPY . ${AGENT_DIR}
+# Copy agent files (including symlinked directories)
+# Build context is canada-research root, so paths are relative to that
+COPY mle-bench/agents/agent_v5_kaggle/ ${AGENT_DIR}/
+COPY agent_v5/ ${AGENT_DIR}/agent_v5/
+COPY debug.py ${AGENT_DIR}/debug.py
+COPY security/ ${AGENT_DIR}/security/
+COPY observability/ ${AGENT_DIR}/observability/
 
 # Set working directory to CODE_DIR (agent's workspace)
 WORKDIR ${CODE_DIR}
