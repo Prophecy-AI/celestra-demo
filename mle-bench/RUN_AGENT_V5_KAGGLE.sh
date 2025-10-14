@@ -197,23 +197,48 @@ echo "=========================================="
 
 # Find latest run
 RUN_GROUP=$(ls -t runs/ | head -1)
+
+if [ -z "$RUN_GROUP" ]; then
+    echo "❌ ERROR: No run results found in runs/"
+    exit 1
+fi
+
 echo "Run group: $RUN_GROUP"
 echo ""
 
+# Check what files were created
+echo "Files in run directory:"
+ls -la "runs/$RUN_GROUP/" | head -20
 echo ""
-echo "=========================================="
-echo "Step 5: Grade Submission"
-echo "=========================================="
 
-# Generate submission JSONL
-python experiments/make_submission.py \
-  --metadata runs/$RUN_GROUP/metadata.json \
-  --output runs/$RUN_GROUP/submission.jsonl
+# Check if grading already happened
+GRADING_REPORT=$(find "runs/$RUN_GROUP/" -name "*_grading_report.json" -o -name "results.json" | head -1)
+if [ -n "$GRADING_REPORT" ]; then
+    echo "✅ Grading already complete"
+    echo "   Report: $GRADING_REPORT"
+else
+    echo ""
+    echo "=========================================="
+    echo "Step 5: Grade Submission"
+    echo "=========================================="
 
-# Grade
-mlebench grade \
-  --submission runs/$RUN_GROUP/submission.jsonl \
-  --output-dir runs/$RUN_GROUP
+    # Check if submission.jsonl exists, if not create it
+    if [ ! -f "runs/$RUN_GROUP/submission.jsonl" ]; then
+        echo "Generating submission JSONL..."
+        python experiments/make_submission.py \
+          --metadata runs/$RUN_GROUP/metadata.json \
+          --output runs/$RUN_GROUP/submission.jsonl
+    fi
+
+    # Grade
+    echo "Grading submission..."
+    mlebench grade \
+      --submission runs/$RUN_GROUP/submission.jsonl \
+      --output-dir runs/$RUN_GROUP
+
+    # Find the grading report
+    GRADING_REPORT=$(find "runs/$RUN_GROUP/" -name "*_grading_report.json" -o -name "results.json" | head -1)
+fi
 
 echo ""
 echo "=========================================="
@@ -221,14 +246,29 @@ echo "COMPLETE!"
 echo "=========================================="
 echo "Results in: runs/$RUN_GROUP/"
 echo ""
-echo "View logs:"
-echo "  cat runs/$RUN_GROUP/*/logs/*.log"
-echo ""
-echo "View code:"
-echo "  ls runs/$RUN_GROUP/*/code/"
-echo ""
-echo "View submission:"
-echo "  cat runs/$RUN_GROUP/*/submission/submission.csv"
-echo ""
-echo "View grading results:"
-echo "  cat runs/$RUN_GROUP/results.json"
+
+# Find the actual competition directory
+COMP_DIR=$(find "runs/$RUN_GROUP/" -maxdepth 1 -type d ! -name "$(basename runs/$RUN_GROUP)" | head -1)
+
+if [ -n "$COMP_DIR" ]; then
+    COMP_NAME=$(basename "$COMP_DIR")
+    echo "Competition: $COMP_NAME"
+    echo ""
+    echo "View logs:"
+    echo "  find $COMP_DIR -name '*.log' -exec cat {} \;"
+    echo ""
+    echo "View code:"
+    echo "  ls $COMP_DIR/code/ 2>/dev/null || echo 'No code directory'"
+    echo ""
+    echo "View submission:"
+    echo "  ls $COMP_DIR/submission/ 2>/dev/null || echo 'No submission directory'"
+    echo ""
+fi
+
+if [ -n "$GRADING_REPORT" ]; then
+    echo "View grading results:"
+    echo "  cat $GRADING_REPORT"
+    echo ""
+    echo "Grading summary:"
+    cat "$GRADING_REPORT" | head -30
+fi

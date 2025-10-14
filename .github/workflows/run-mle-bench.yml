@@ -129,7 +129,9 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: grading-report-${{ github.ref_name }}-run${{ github.run_number }}
-          path: ${{ github.workspace }}/mle-bench/runs/*/results.json
+          path: |
+            ${{ github.workspace }}/mle-bench/runs/*/*_grading_report.json
+            ${{ github.workspace }}/mle-bench/runs/*/results.json
           retention-days: 90
 
       - name: Display results summary
@@ -148,12 +150,16 @@ jobs:
             echo "Run group: $RUN_GROUP"
             echo ""
 
-            # Show grading results if available
-            if [ -f "runs/$RUN_GROUP/results.json" ]; then
+            # Find grading report (either format)
+            GRADING_REPORT=$(find "runs/$RUN_GROUP/" -name "*_grading_report.json" -o -name "results.json" | head -1)
+
+            if [ -n "$GRADING_REPORT" ]; then
               echo "Grading Results:"
-              cat "runs/$RUN_GROUP/results.json" | head -50
+              cat "$GRADING_REPORT" | head -50
             else
               echo "⚠️  Grading results not found"
+              echo "Files in run directory:"
+              ls -la "runs/$RUN_GROUP/"
             fi
 
             echo ""
