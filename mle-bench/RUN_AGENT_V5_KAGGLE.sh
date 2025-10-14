@@ -4,6 +4,16 @@
 
 set -e  # Exit on error
 
+# === ACTIVATE VIRTUAL ENVIRONMENT IF PRESENT ===
+# When running with sudo, venv is not preserved, so source it
+if [ -n "$VIRTUAL_ENV" ]; then
+    echo "Activating virtual environment: $VIRTUAL_ENV"
+    source "$VIRTUAL_ENV/bin/activate"
+elif [ -f "venv/bin/activate" ]; then
+    echo "Found venv in current directory, activating..."
+    source venv/bin/activate
+fi
+
 # === VALIDATE WE'RE IN THE RIGHT DIRECTORY ===
 if [ ! -f "environment/Dockerfile" ]; then
     echo "❌ ERROR: Must run this script from the mle-bench directory"
@@ -104,7 +114,7 @@ if [ "$DRY_RUN" = "true" ]; then
 else
     for line in $(cat experiments/splits/custom-set.txt); do
         echo "Preparing: $line"
-        mlebench prepare -c $line
+        python -m mlebench prepare -c $line
     done
 
     git lfs pull
@@ -193,7 +203,7 @@ python experiments/make_submission.py \
   --output runs/$RUN_GROUP/submission.jsonl
 
 # Grade
-mlebench grade \
+python -m mlebench grade \
   --submission runs/$RUN_GROUP/submission.jsonl \
   --output-dir runs/$RUN_GROUP
 
