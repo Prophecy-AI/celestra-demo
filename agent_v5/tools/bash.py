@@ -31,7 +31,7 @@ class BashTool(BaseTool):
     def schema(self) -> Dict:
         return {
             "name": "Bash",
-            "description": "Execute shell commands in workspace. CRITICAL: background parameter is REQUIRED - you must choose execution mode. background=false: Command BLOCKS you completely until it finishes (max 120s timeout, use for quick tasks <30s only). background=true: Command starts immediately, returns shell_id, runs in background (no timeout, use for training >30s). Monitor with ReadBashOutput(shell_id). IMPORTANT: Stay within workspace directory.",
+            "description": "Execute shell commands in workspace. CRITICAL: background parameter is REQUIRED - you must choose execution mode. background=false: Command BLOCKS you completely until it finishes. background=true: Command starts immediately, returns shell_id, runs in background (no timeout, use for >30s). Monitor with ReadBashOutput(shell_id). IMPORTANT: Stay within workspace directory.",
             "input_schema": {
                 "type": "object",
                 "properties": {
