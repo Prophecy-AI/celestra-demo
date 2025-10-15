@@ -2,6 +2,8 @@
 ResearchAgent - Main agentic loop for Agent V5
 """
 import os
+import asyncio
+import time
 from typing import List, Dict, AsyncGenerator
 from anthropic import Anthropic
 from agent_v5.tools.registry import ToolRegistry
@@ -56,6 +58,37 @@ class ResearchAgent:
         killed = await self.process_registry.cleanup()
         if killed > 0:
             log(f"✓ Cleaned up {killed} background processes", 1)
+
+    def _should_wait_for_process(self, tool_uses: List[Dict], tool_results: List[Dict]) -> bool:
+        if len(tool_uses) != 1 or tool_uses[0]["name"] != "ReadBashOutput":
+            return False
+        content = tool_results[0]["content"]
+        return "[RUNNING]" in content and "(no new output since last read)" in content
+
+    async def _wait_for_process(self, shell_id: str) -> str:
+        bg_process = self.process_registry.get(shell_id)
+        if not bg_process:
+            return "Process not found"
+        
+        while bg_process.process.returncode is None:
+            await asyncio.sleep(30)
+            log(f"→ Still waiting for {shell_id} (runtime: {time.time() - bg_process.start_time:.0f}s)")
+        
+        new_output = bg_process.stdout_data[bg_process.stdout_cursor:].decode('utf-8', errors='replace')
+        new_output += bg_process.stderr_data[bg_process.stderr_cursor:].decode('utf-8', errors='replace')
+        bg_process.stdout_cursor = len(bg_process.stdout_data)
+        bg_process.stderr_cursor = len(bg_process.stderr_data)
+        
+        runtime = time.time() - bg_process.start_time
+        exit_code = bg_process.process.returncode
+        
+        log(f"✓ {shell_id} completed (exit code: {exit_code}, runtime: {runtime:.0f}s)", 1)
+        
+        return (
+            f"[COMPLETED] {shell_id} (exit code: {exit_code}, runtime: {runtime:.0f}s)\n"
+            f"Command: {bg_process.command}\n\n"
+            f"{new_output}"
+        )
 
     async def run(self, user_message: str) -> AsyncGenerator[Dict, None]:
         """Main agentic loop"""
@@ -128,6 +161,12 @@ class ResearchAgent:
                     "tool_input": tool_use["input"],
                     "tool_output": result["content"]
                 }
+
+            if self._should_wait_for_process(tool_uses, tool_results):
+                shell_id = tool_uses[0]["input"]["shell_id"]
+                log(f"→ Detected waiting, sleeping until {shell_id} completes")
+                completion_result = await self._wait_for_process(shell_id)
+                tool_results[0]["content"] = completion_result
 
             self.conversation_history.append({
                 "role": "user",
