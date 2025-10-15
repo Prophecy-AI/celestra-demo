@@ -72,10 +72,19 @@ class ResearchAgent:
         
         while bg_process.process.returncode is None:
             await asyncio.sleep(30)
-            log(f"→ Still waiting for {shell_id} (runtime: {time.time() - bg_process.start_time:.0f}s)")
+            
+            new_output = bg_process.stdout_data[bg_process.stdout_cursor:].decode('utf-8', errors='replace')
+            new_output += bg_process.stderr_data[bg_process.stderr_cursor:].decode('utf-8', errors='replace')
+            
+            if new_output.strip():
+                log(f"→ {shell_id} output: {new_output[:200]}")
+                bg_process.stdout_cursor = len(bg_process.stdout_data)
+                bg_process.stderr_cursor = len(bg_process.stderr_data)
+            else:
+                log(f"→ Still waiting for {shell_id} (runtime: {time.time() - bg_process.start_time:.0f}s)")
         
-        new_output = bg_process.stdout_data[bg_process.stdout_cursor:].decode('utf-8', errors='replace')
-        new_output += bg_process.stderr_data[bg_process.stderr_cursor:].decode('utf-8', errors='replace')
+        final_output = bg_process.stdout_data[bg_process.stdout_cursor:].decode('utf-8', errors='replace')
+        final_output += bg_process.stderr_data[bg_process.stderr_cursor:].decode('utf-8', errors='replace')
         bg_process.stdout_cursor = len(bg_process.stdout_data)
         bg_process.stderr_cursor = len(bg_process.stderr_data)
         
@@ -84,10 +93,13 @@ class ResearchAgent:
         
         log(f"✓ {shell_id} completed (exit code: {exit_code}, runtime: {runtime:.0f}s)", 1)
         
+        all_output = bg_process.stdout_data.decode('utf-8', errors='replace')
+        all_output += bg_process.stderr_data.decode('utf-8', errors='replace')
+        
         return (
             f"[COMPLETED] {shell_id} (exit code: {exit_code}, runtime: {runtime:.0f}s)\n"
             f"Command: {bg_process.command}\n\n"
-            f"{new_output}"
+            f"{all_output}"
         )
 
     async def run(self, user_message: str) -> AsyncGenerator[Dict, None]:
