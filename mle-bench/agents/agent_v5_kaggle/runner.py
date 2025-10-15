@@ -12,7 +12,7 @@ AGENT_DIR = os.environ.get('AGENT_DIR', '/home/agent')
 sys.path.insert(0, AGENT_DIR)
 
 from kaggle_agent import KaggleAgent
-from debug import log
+from debug import log, log_tool_call
 
 
 async def main():
@@ -67,15 +67,7 @@ async def main():
                 print(text, end="", flush=True)
                 full_response.append(text)
             elif message.get("type") == "tool_execution":
-                # Show exactly what LLM sees
-                print(f"\n\n{'='*80}", flush=True)
-                log(f"🔧 TOOL CALL: {message['tool_name']}")
-                print(f"{'='*80}", flush=True)
-                print(f"📥 INPUT (what LLM sent):", flush=True)
-                print(json.dumps(message['tool_input'], indent=2), flush=True)
-                print(f"\n📤 OUTPUT (what LLM received):", flush=True)
-                print(message['tool_output'], flush=True)
-                print(f"{'='*80}\n", flush=True)
+                log_tool_call(message)
     except Exception as e:
         log(f"❌ Agent error: {e}", 2)
         print(f"\n\nERROR: {e}\n", flush=True)
