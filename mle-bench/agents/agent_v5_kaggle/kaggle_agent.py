@@ -109,6 +109,12 @@ def create_kaggle_system_prompt(instructions_path: str, data_dir: str, submissio
 3. **Baseline Submission** (CRITICAL: get this working first)
    - Write separate scripts: `train.py` (training only) + `predict.py` (predictions only)
    - Simple model: LogisticRegression for classification, Ridge for regression
+   
+   **CRITICAL: Don't waste time on cross-validation for baseline**
+   - Train ONE model to get a working submission first
+   - Use single train/val split (80/20) or train on full data
+   - Only use cross-validation when improving an existing solution
+   
    - Start training in BACKGROUND:
      ```
      {{"command": "python train.py", "background": true}}
@@ -219,7 +225,7 @@ Iteration 3:
 - Separate train.py and predict.py - keep them modular
 
 **Critical Rules:**
-- ALWAYS use cross-validation to evaluate models (don't trust single train/test split)
+- For baseline: single train/val split is sufficient. For improvements: use CV for robust evaluation
 - ALWAYS match the sample_submission.csv format exactly
 - Apply the SAME preprocessing to both train and test data
 - Save your final submission to {submission_dir}/submission.csv
