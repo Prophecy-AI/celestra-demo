@@ -117,14 +117,15 @@ jobs:
             python3 -m venv venv
           fi
 
-          # Activate venv and install ONLY mlebench dependencies (not mlebench itself)
+          # Activate venv and install mlebench in NON-EDITABLE mode
           source venv/bin/activate
-          echo "Installing mlebench dependencies..."
-          pip install -q click tqdm requests
+          echo "Installing mlebench (non-editable mode to avoid import conflicts)..."
+          pip install --force-reinstall --no-cache-dir . --quiet
 
           echo "✅ Python environment ready"
           echo "   Python: $(which python)"
-          echo "   NOTE: mlebench runs inside Docker container, not from host install"
+          echo "   mlebench: $(python -c 'import mlebench; print(mlebench.__file__)')"
+          echo "   NOTE: Agent code runs inside Docker container (isolated)"
 
       - name: Run MLE-Bench
         timeout-minutes: 1400  # 23.3 hours (slightly less than job timeout for cleanup)
