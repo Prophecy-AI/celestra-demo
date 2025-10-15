@@ -1,0 +1,7 @@
+block access to files and folders outside workspace/session_id in the tools
+debug=1 logs on local and modal (without interference with current code or bloating the codebase. this should be the most brilliant implementation of logging anywhere in any codebase in the planet. we are minizming the number of lines of code for these logs as much as possible)
+opentelemetry on anthropic calls
+langfuse integration
+async evals (hallucination, retrieval, sql, answer, code, objective realization)
+a way to download the analysis files from modal in the local endpoint
+tests for core features only

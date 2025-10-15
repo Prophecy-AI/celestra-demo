@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(mkdir:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npm install)",
+<<<<<<< HEAD
+      "Bash(git checkout:*)"
+=======
+      "Bash(find:*)"
+>>>>>>> origin/mcp
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
