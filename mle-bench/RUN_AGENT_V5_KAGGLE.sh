@@ -156,7 +156,7 @@ fi
 
 # Build agent_v5_kaggle image
 echo "Building agent_v5_kaggle image..."
-
+echo $(pwd)
 if [ "$DRY_RUN" = "true" ]; then
     echo "🔍 DRY RUN: Would build Docker image with:"
     echo "   Tag: $IMAGE_TAG"
@@ -167,6 +167,8 @@ else
     # Build from parent directory (canada-research) to resolve symlinks
     # The symlinks in agent_v5_kaggle/ point to ../../../agent_v5, etc.
     cd ..
+    echo $(pwd)
+    cat debug.py
     docker build --no-cache --platform=linux/amd64 -t "$IMAGE_TAG" \
       -f mle-bench/agents/agent_v5_kaggle/Dockerfile \
       . \
