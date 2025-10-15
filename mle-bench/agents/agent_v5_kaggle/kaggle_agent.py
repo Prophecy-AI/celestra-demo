@@ -110,10 +110,19 @@ def create_kaggle_system_prompt(instructions_path: str, data_dir: str, submissio
    - Write separate scripts: `train.py` (training only) + `predict.py` (predictions only)
    - Simple model: LogisticRegression for classification, Ridge for regression
    
-   **CRITICAL: Don't waste time on cross-validation for baseline**
-   - Train ONE model to get a working submission first
-   - Use single train/val split (80/20) or train on full data
-   - Only use cross-validation when improving an existing solution
+   **CRITICAL: NO CROSS-VALIDATION FOR BASELINE - DO NOT USE FOLDS**
+   ```python
+   # CORRECT BASELINE APPROACH:
+   from sklearn.model_selection import train_test_split
+   X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2)
+   model.fit(X_train, y_train)
+   val_score = evaluate(model, X_val, y_val)
+   print(f"Validation score: {{val_score}}")
+   
+   # WRONG - DO NOT DO THIS FOR BASELINE:
+   # from sklearn.model_selection import StratifiedKFold
+   # kf = StratifiedKFold(n_splits=5)  # ← NO! Takes 5x longer
+   ```
    
    - Start training in BACKGROUND:
      ```
@@ -147,7 +156,7 @@ This is where you spend most of your time. Each iteration:
 **C. IMPLEMENT EXPERIMENT**
    - Update `train.py` with hypothesis changes
    - Write code to test hypothesis
-   - Include logging to verify hypothesis: print CV scores, feature importance, etc.
+   - Include logging to verify hypothesis: print validation scores, feature importance, etc.
 
 **D. RUN IN BACKGROUND + MONITOR**
    ```
@@ -163,8 +172,8 @@ This is where you spend most of your time. Each iteration:
    **What you see:**
    ```
    === Status: RUNNING ===
-   Fold 1/5: AUC=0.845
-   Fold 2/5: AUC=0.851
+   Epoch 5/10: loss=0.234, val_auc=0.845
+   Epoch 6/10: loss=0.198, val_auc=0.862
    ```
 
    **DON'T just wait - use this time to:**
@@ -176,7 +185,7 @@ This is where you spend most of your time. Each iteration:
 **E. ANALYZE RESULTS (when COMPLETED)**
    ```
    === Status: COMPLETED (exit code: 0) ===
-   Mean CV AUC: 0.847 (±0.012)
+   Final Validation AUC: 0.847
    Previous best: 0.823
    Improvement: +0.024 ✓ Hypothesis confirmed!
    ```
@@ -199,21 +208,21 @@ This is where you spend most of your time. Each iteration:
 
 Iteration 1:
 - Hypothesis: "Random forest will capture non-linear patterns"
-- Run train.py (background) → Monitor → CV AUC: 0.812 (vs baseline 0.780)
+- Run train.py (background) → Monitor → Val AUC: 0.812 (vs baseline 0.780)
 - Result: +0.032 improvement ✓
 - Next: "XGBoost might do even better"
 
 Iteration 2:
 - While RF training finishes, plan XGBoost experiment
 - Hypothesis: "XGBoost with tuned hyperparameters beats RF"
-- Update train.py, run (background) → Monitor → CV AUC: 0.845
+- Update train.py, run (background) → Monitor → Val AUC: 0.845
 - Result: +0.033 improvement ✓
 - Next: "Feature engineering: create interaction features"
 
 Iteration 3:
 - While XGBoost trains, analyze feature importance from previous run
 - Hypothesis: "Top-3 feature interactions will help"
-- Code feature engineering → Run (background) → Monitor → CV AUC: 0.867
+- Code feature engineering → Run (background) → Monitor → Val AUC: 0.867
 - Result: +0.022 improvement ✓
 - Generate submission (now at 0.867)
 
@@ -225,7 +234,8 @@ Iteration 3:
 - Separate train.py and predict.py - keep them modular
 
 **Critical Rules:**
-- For baseline: single train/val split is sufficient. For improvements: use CV for robust evaluation
+- **Baseline**: Use SINGLE train/val split (80/20). DO NOT use cross-validation folds - wastes 5x time!
+- **Improvements**: After baseline works, you MAY use cross-validation for robust evaluation
 - ALWAYS match the sample_submission.csv format exactly
 - Apply the SAME preprocessing to both train and test data
 - Save your final submission to {submission_dir}/submission.csv
