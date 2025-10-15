@@ -223,6 +223,7 @@ def download_file(session_id: str, file_path: str) -> Dict:
 @app.local_entrypoint()
 def chat():
     from dotenv import load_dotenv
+    from debug import log_tool_call
     load_dotenv()
 
     GCP_PROJECT = os.getenv("GCP_PROJECT")
@@ -313,15 +314,7 @@ def chat():
                 if message.get("type") == "text_delta":
                     print(message["text"], end="", flush=True)
                 elif message.get("type") == "tool_execution":
-                    # Show exactly what LLM sees
-                    print(f"\n\n{'='*80}", flush=True)
-                    print(f"🔧 TOOL CALL: {message['tool_name']}", flush=True)
-                    print(f"{'='*80}", flush=True)
-                    print(f"📥 INPUT (what LLM sent):", flush=True)
-                    print(json.dumps(message['tool_input'], indent=2), flush=True)
-                    print(f"\n📤 OUTPUT (what LLM received):", flush=True)
-                    print(message['tool_output'], flush=True)
-                    print(f"{'='*80}\n", flush=True)
+                    log_tool_call(message)
 
             print("\n" + "-" * 80)
             print()

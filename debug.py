@@ -1,5 +1,5 @@
 """Ultra-minimal debug logging - DEBUG=1 to enable"""
-import os, time, functools, contextvars
+import os, time, functools, contextvars, json
 
 _D = os.getenv("DEBUG") == "1"
 _C = "\033[2m", "\033[2;32m", "\033[2;31m", "\033[0m"  # dim, green, red, reset
@@ -36,3 +36,14 @@ def trace(n):
                 raise
         return w
     return d
+
+def log_tool_call(message):
+    """Log tool call with input/output - shows exactly what LLM sees"""
+    print(f"\n\n{'='*80}", flush=True)
+    print(f"🔧 TOOL CALL: {message['tool_name']}", flush=True)
+    print(f"{'='*80}", flush=True)
+    print(f"📥 INPUT (what LLM sent):", flush=True)
+    print(json.dumps(message['tool_input'], indent=2), flush=True)
+    print(f"\n📤 OUTPUT (what LLM received):", flush=True)
+    print(message['tool_output'], flush=True)
+    print(f"{'='*80}\n", flush=True)
