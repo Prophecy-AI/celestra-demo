@@ -127,22 +127,28 @@ echo "=========================================="
 echo "Step 1: Build Docker Images"
 echo "=========================================="
 
-# Check if base mlebench-env image exists
-if ! docker image inspect mlebench-env:latest >/dev/null 2>&1; then
-    echo "Building base image 'mlebench-env'..."
-    echo ""
+# Clean Python bytecode BEFORE building Docker images
+echo "Cleaning Python bytecode..."
+cd ..
+find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find . -type f -name "*.pyc" -delete 2>/dev/null || true
+find . -type f -name "*.pyo" -delete 2>/dev/null || true
+cd mle-bench
+echo "✅ Python bytecode cleaned"
+echo ""
 
-    if [ "$DRY_RUN" = "true" ]; then
-        echo "🔍 DRY RUN: Would build mlebench-env base image"
-    else
-        docker build --platform=linux/amd64 -t mlebench-env -f environment/Dockerfile .
-        echo "✅ Base image mlebench-env built successfully"
-    fi
-    echo ""
+# Always rebuild base image to ensure latest code (no cache)
+echo "Building base image 'mlebench-env' (forced rebuild)..."
+echo ""
+
+if [ "$DRY_RUN" = "true" ]; then
+    echo "🔍 DRY RUN: Would build mlebench-env base image"
 else
-    echo "✅ Base image mlebench-env already exists"
-    echo ""
+    # Force rebuild with --no-cache
+    docker build --no-cache --platform=linux/amd64 -t mlebench-env -f environment/Dockerfile .
+    echo "✅ Base image mlebench-env built successfully"
 fi
+echo ""
 
 # Build agent_v5_kaggle image
 echo "Building agent_v5_kaggle image..."

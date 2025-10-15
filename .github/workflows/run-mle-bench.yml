@@ -65,8 +65,17 @@ jobs:
         run: |
           echo "Cleaning workspace..."
           cd $GITHUB_WORKSPACE || true
+
+          # Remove ALL Python bytecode
+          find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find . -type f -name "*.pyc" -delete 2>/dev/null || true
+          find . -type f -name "*.pyo" -delete 2>/dev/null || true
+
+          # Clean git
           git clean -fdx || true
           git reset --hard HEAD || true
+
+          echo "✅ Workspace cleaned (including Python bytecode)"
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -108,14 +117,14 @@ jobs:
             python3 -m venv venv
           fi
 
-          # Activate venv and install mlebench
+          # Activate venv and install ONLY mlebench dependencies (not mlebench itself)
           source venv/bin/activate
-          echo "Installing mlebench..."
-          pip install -e . --quiet
+          echo "Installing mlebench dependencies..."
+          pip install -q click tqdm requests
 
           echo "✅ Python environment ready"
           echo "   Python: $(which python)"
-          echo "   mlebench: $(python -c 'import mlebench; print(mlebench.__file__)')"
+          echo "   NOTE: mlebench runs inside Docker container, not from host install"
 
       - name: Run MLE-Bench
         timeout-minutes: 1400  # 23.3 hours (slightly less than job timeout for cleanup)
