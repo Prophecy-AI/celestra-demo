@@ -169,7 +169,7 @@ else
     cd ..
     echo $(pwd)
     cat debug.py
-    docker build --no-cache --platform=linux/amd64 -t "$IMAGE_TAG" \
+    docker build --no-cache --platform=linux/amd64 -t "$IMAGE_TAG" -t "agent_v5_kaggle:latest" \
       -f mle-bench/agents/agent_v5_kaggle/Dockerfile \
       . \
       --build-arg SUBMISSION_DIR=$SUBMISSION_DIR \
