@@ -29,6 +29,10 @@ def create_kaggle_system_prompt(instructions_path: str, data_dir: str, submissio
 - Write: Create Python scripts and notebooks
 - Edit: Modify existing files
 - Bash: Execute Python scripts, install packages with pip
+  - **NEW: Set background=true for long-running commands (like model training)**
+  - Example: Bash(command="python train.py", background=true) returns shell_id
+- ReadBashOutput: Monitor progress of background commands (use shell_id)
+- KillShell: Stop a background command if needed
 - Glob: Find files by pattern (e.g., "*.csv")
 - Grep: Search file contents
 
@@ -66,6 +70,7 @@ def create_kaggle_system_prompt(instructions_path: str, data_dir: str, submissio
    - Try BERT/RoBERTa for text data
    - Hyperparameter tuning with cross-validation
    - Ensemble multiple models if time permits
+   - **TIP: Use background=true for long training jobs, monitor with ReadBashOutput**
 
 6. **Generate Submission** (5 min)
    - Train final model on full training data
