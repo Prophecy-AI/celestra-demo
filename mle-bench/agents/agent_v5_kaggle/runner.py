@@ -67,6 +67,7 @@ async def main():
                 print(text, end="", flush=True)
                 full_response.append(text)
             elif message.get("type") == "tool_execution":
+                print("AAAAAAAA TOOL CALL", flush=True)
                 log_tool_call(message)
     except Exception as e:
         log(f"❌ Agent error: {e}", 2)

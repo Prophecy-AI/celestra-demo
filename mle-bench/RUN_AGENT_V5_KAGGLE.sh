@@ -256,7 +256,7 @@ echo "Logs will stream in real-time..."
 echo ""
 
 # Use -u for unbuffered output (real-time log streaming)
-python -u run_agent.py \
+DEBUG=1 python -u run_agent.py \
   --agent-id "${AGENT_ID}" \
   --competition-set experiments/splits/custom-set.txt \
   --container-config "$TMP_CONFIG"
