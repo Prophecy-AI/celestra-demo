@@ -2,6 +2,7 @@
 Bash tool for executing shell commands
 """
 import asyncio
+import os
 import uuid
 import time
 from typing import Dict, Optional
@@ -72,11 +73,17 @@ class BashTool(BaseTool):
     async def _execute_foreground(self, command: str, timeout_s: float) -> Dict:
         """Execute command in foreground (blocking until completion)"""
         try:
+            # Set PYTHONUNBUFFERED=1 to force Python to flush stdout/stderr immediately
+            # This ensures print() statements appear in real-time when running Python scripts
+            env = os.environ.copy()
+            env['PYTHONUNBUFFERED'] = '1'
+
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=self.workspace_dir  # Use cwd parameter, not cd &&
+                cwd=self.workspace_dir,  # Use cwd parameter, not cd &&
+                env=env
             )
 
             stdout, stderr = await asyncio.wait_for(
@@ -125,11 +132,17 @@ class BashTool(BaseTool):
         shell_id = f"bash_{uuid.uuid4().hex[:8]}"
 
         try:
+            # Set PYTHONUNBUFFERED=1 to force Python to flush stdout/stderr immediately
+            # This ensures print() statements appear in real-time when running Python scripts
+            env = os.environ.copy()
+            env['PYTHONUNBUFFERED'] = '1'
+
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=self.workspace_dir  # Use cwd parameter, not cd &&
+                cwd=self.workspace_dir,  # Use cwd parameter, not cd &&
+                env=env
             )
 
             # Create background process object

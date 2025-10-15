@@ -76,6 +76,14 @@ def create_kaggle_system_prompt(instructions_path: str, data_dir: str, submissio
 
   **Note:** Captures ALL output automatically - do NOT use `tee` or `2>&1` redirection in commands
 
+  **Python Output Buffering:**
+  - PYTHONUNBUFFERED=1 is automatically set for all commands
+  - This ensures print() statements appear immediately in ReadBashOutput
+  - If you don't see output from your Python script, the script may be:
+    - Still loading imports (large packages like tensorflow can take 5-10s)
+    - Running computations without print statements
+    - Encountering an error (check for COMPLETED with non-zero exit code)
+
 - **KillShell: Terminate background command**
 
   **When to use:**
