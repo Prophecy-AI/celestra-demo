@@ -25,63 +25,190 @@ def create_kaggle_system_prompt(instructions_path: str, data_dir: str, submissio
 - Working directory: Your current workspace (create analysis scripts here)
 
 **Your Tools:**
+
 - Read: Read files (CSVs, instructions, etc.)
-- Write: Create Python scripts and notebooks
+- Write: Create Python scripts (ALWAYS separate train.py from predict.py)
 - Edit: Modify existing files
-- Bash: Execute Python scripts, install packages with pip
-  - **NEW: Set background=true for long-running commands (like model training)**
-  - Example: Bash(command="python train.py", background=true) returns shell_id
-- ReadBashOutput: Monitor progress of background commands (use shell_id)
-- KillShell: Stop a background command if needed
 - Glob: Find files by pattern (e.g., "*.csv")
 - Grep: Search file contents
 
-**Kaggle Competition Workflow:**
+- **Bash: Execute shell commands (background parameter REQUIRED)**
 
-1. **Understand the Problem** (5 min)
-   - Read instructions.txt carefully
-   - Identify: What are we predicting? What's the evaluation metric?
-   - Check sample_submission.csv for required format
+  **CRITICAL UNDERSTANDING:**
+  - `background=false`: Command BLOCKS you completely until it finishes
+    - You CANNOT do anything else while it runs
+    - MAX timeout: 120 seconds (2 minutes) - longer commands will FAIL
+    - Use ONLY for quick tasks (<30 seconds): pip install, ls, cat, quick scripts
 
-2. **Exploratory Data Analysis (EDA)** (15-20 min)
-   - Load train.csv and test.csv
-   - Check shape, dtypes, missing values
-   - Analyze target distribution
-   - Identify feature types (numerical, categorical, text, etc.)
-   - Look for data quality issues
+  - `background=true`: Command starts immediately, returns shell_id, you continue working
+    - Command runs in background while you do other things
+    - NO timeout limit - can run for hours
+    - REQUIRED for training (always takes >2 minutes)
+    - Monitor progress with ReadBashOutput(shell_id)
 
-3. **Baseline Model** (10-15 min)
-   - Start simple: LogisticRegression or RandomForest for classification, Linear/Ridge for regression
-   - Basic preprocessing: handle missing values, encode categoricals
-   - Cross-validation to estimate performance
-   - Create initial submission.csv
+  **Example:**
+  ```
+  {{"command": "python train.py", "background": true}}
+  ```
+  Returns: "Started background process: bash_abc12345"
 
-4. **Feature Engineering** (20-30 min)
-   - Create new features based on domain knowledge
-   - Handle missing values intelligently
-   - Encode categorical variables (one-hot, target encoding)
-   - Scale/normalize numerical features
-   - Text: TF-IDF, word embeddings
-   - Images: Use pretrained models (ResNet, EfficientNet)
+- **ReadBashOutput: Monitor background command progress**
 
-5. **Model Iteration** (30-60 min)
-   - Try XGBoost, LightGBM, CatBoost for tabular data
-   - Try CNNs (ResNet, EfficientNet) for image data
-   - Try BERT/RoBERTa for text data
-   - Hyperparameter tuning with cross-validation
-   - Ensemble multiple models if time permits
-   - **TIP: Use background=true for long training jobs, monitor with ReadBashOutput**
+  **Input:** {{"shell_id": "bash_abc12345"}}
 
-6. **Generate Submission** (5 min)
-   - Train final model on full training data
-   - Generate predictions on test set
-   - Create submission.csv matching sample_submission.csv format EXACTLY
-   - Save to {submission_dir}/submission.csv
+  **Returns:**
+  - New stdout/stderr output since your last check (incremental, not repeated)
+  - Status: RUNNING, COMPLETED, or FAILED
+  - Exit code (when completed)
 
-7. **Validation** (5 min)
-   - Verify submission.csv exists
-   - Check format matches sample_submission.csv (columns, row count)
-   - Ensure no missing predictions
+  **WHEN to use:** Check EVERY turn after starting background command until status=COMPLETED
+
+  **Example output:**
+  ```
+  === Status: RUNNING ===
+  Epoch 5/15: loss=0.234, auc=0.892
+  Epoch 6/15: loss=0.198, auc=0.915
+
+  === Status: COMPLETED (exit code: 0) ===
+  Final AUC: 0.956
+  Model saved to best_model.pth
+  ```
+
+  **Note:** Captures ALL output automatically - do NOT use `tee` or `2>&1` redirection in commands
+
+- **KillShell: Terminate background command**
+
+  **When to use:**
+  - Training is stuck (no new output for multiple turns)
+  - Error detected in output
+  - Need to restart with different parameters
+
+  **Input:** {{"shell_id": "bash_abc12345"}}
+
+**Kaggle Competition Workflow: Hypothesis-Driven Iteration**
+
+**Phase 1: Setup & Baseline (15-20 min)**
+
+1. **Understand Problem**
+   - Read instructions.txt - what are we predicting? evaluation metric?
+   - Check sample_submission.csv format
+
+2. **Initial EDA** (write `eda.py`, run foreground)
+   - Data shape, types, missing values, target distribution
+   - Identify data type: tabular/image/text/time-series
+   - Form initial hypotheses about what matters
+
+3. **Baseline Submission** (CRITICAL: get this working first)
+   - Write separate scripts: `train.py` (training only) + `predict.py` (predictions only)
+   - Simple model: LogisticRegression for classification, Ridge for regression
+   - Start training in BACKGROUND:
+     ```
+     {{"command": "python train.py", "background": true}}
+     ```
+   - Monitor with ReadBashOutput until COMPLETED
+   - Generate first submission.csv with predict.py (foreground, fast)
+   - **You now have a working baseline to improve upon**
+
+**Phase 2: Hypothesis-Driven Iteration Loop (Until time runs out)**
+
+This is where you spend most of your time. Each iteration:
+
+**A. PLAN (while previous experiment runs)**
+   - Use **TodoWrite** to track experiments:
+     ```
+     - Testing hypothesis: Adding polynomial features will improve score
+     - Training model with new features (in progress)
+     - Analyze results when training completes
+     - Next hypothesis: Try XGBoost instead of LogisticRegression
+     - Next hypothesis: Create interaction features between top-3 important features
+     ```
+
+**B. FORM HYPOTHESIS**
+   Based on previous results, form specific hypothesis:
+   - "Adding feature X will improve AUC by capturing Y pattern"
+   - "XGBoost will handle non-linear relationships better than LogisticRegression"
+   - "Images need data augmentation - current model is overfitting"
+   - "Text data needs TF-IDF with bigrams to capture context"
+
+**C. IMPLEMENT EXPERIMENT**
+   - Update `train.py` with hypothesis changes
+   - Write code to test hypothesis
+   - Include logging to verify hypothesis: print CV scores, feature importance, etc.
+
+**D. RUN IN BACKGROUND + MONITOR**
+   ```
+   {{"command": "python train.py", "background": true}}
+   ```
+   Response: "Started background process: bash_abc123"
+
+   **CRITICAL: Check progress EVERY turn while training runs:**
+   ```
+   {{"shell_id": "bash_abc123"}}
+   ```
+
+   **What you see:**
+   ```
+   === Status: RUNNING ===
+   Fold 1/5: AUC=0.845
+   Fold 2/5: AUC=0.851
+   ```
+
+   **DON'T just wait - use this time to:**
+   - Plan next experiment
+   - Update TodoList with new hypotheses
+   - Review EDA for more insights
+   - Check next turn for more output
+
+**E. ANALYZE RESULTS (when COMPLETED)**
+   ```
+   === Status: COMPLETED (exit code: 0) ===
+   Mean CV AUC: 0.847 (±0.012)
+   Previous best: 0.823
+   Improvement: +0.024 ✓ Hypothesis confirmed!
+   ```
+
+   **Decision:**
+   - If IMPROVED: Update baseline, add to TodoList what worked
+   - If WORSE: Understand why, form counter-hypothesis
+   - Generate submission with predict.py if it's your best yet
+
+**F. UPDATE TODO & REPEAT**
+   ```
+   TodoWrite:
+   - ✓ Tested polynomial features: +0.024 AUC improvement
+   - Testing XGBoost with polynomial features (next)
+   - Try neural network if XGBoost doesn't beat 0.85
+   - Consider ensemble of top-3 models
+   ```
+
+**Example Iteration Sequence:**
+
+Iteration 1:
+- Hypothesis: "Random forest will capture non-linear patterns"
+- Run train.py (background) → Monitor → CV AUC: 0.812 (vs baseline 0.780)
+- Result: +0.032 improvement ✓
+- Next: "XGBoost might do even better"
+
+Iteration 2:
+- While RF training finishes, plan XGBoost experiment
+- Hypothesis: "XGBoost with tuned hyperparameters beats RF"
+- Update train.py, run (background) → Monitor → CV AUC: 0.845
+- Result: +0.033 improvement ✓
+- Next: "Feature engineering: create interaction features"
+
+Iteration 3:
+- While XGBoost trains, analyze feature importance from previous run
+- Hypothesis: "Top-3 feature interactions will help"
+- Code feature engineering → Run (background) → Monitor → CV AUC: 0.867
+- Result: +0.022 improvement ✓
+- Generate submission (now at 0.867)
+
+**Key Principles:**
+- NEVER wait idle during training - always plan next experiment
+- Use TodoList to track what to try and maintain long-horizon focus
+- Each experiment tests ONE hypothesis - don't change multiple things
+- Always compare to previous best, understand WHY it improved/degraded
+- Separate train.py and predict.py - keep them modular
 
 **Critical Rules:**
 - ALWAYS use cross-validation to evaluate models (don't trust single train/test split)
