@@ -191,43 +191,51 @@ async def main():
 
         agent.tools.register(bq_tool)
 
-    while True:
-        try:
-            user_input = input("You: ").strip()
+    try:
+        while True:
+            try:
+                user_input = input("You: ").strip()
 
-            if not user_input:
-                continue
+                if not user_input:
+                    continue
 
-            if user_input.lower() in ['exit', 'quit', 'q']:
-                print("\n👋 Goodbye!")
+                if user_input.lower() in ['exit', 'quit', 'q']:
+                    print("\n👋 Goodbye!")
+                    break
+
+                print("\n⏳ Processing...\n")
+                print("Agent:")
+                print("-" * 80)
+
+                try:
+                    async for message in agent.run(user_input):
+                        #print("+" * 40, flush=True)
+                        #print(message, flush=True)
+                        #print("+" * 40, flush=True)
+                        if message.get("type") == "text_delta":
+                            print(message["text"], end="", flush=True)
+                        elif message.get("type") == "tool_execution":
+                            print(f"\n\n🔧 [Tool: {message['tool_name']}]", flush=True)
+                            #print(f"📥 Input: {json.dumps(message['tool_input'], indent=2)}", flush=True)
+                            #print(f"📤 Output:\n{message['tool_output']}", flush=True)
+                            #print("-" * 40, flush=True)
+                finally:
+                    # Cleanup background processes after each turn
+                    await agent.cleanup()
+
+                print("\n" + "-" * 80)
+                print()
+
+            except KeyboardInterrupt:
+                print("\n\n👋 Goodbye!")
                 break
-
-            print("\n⏳ Processing...\n")
-            print("Agent:")
-            print("-" * 80)
-
-            async for message in agent.run(user_input):
-                #print("+" * 40, flush=True)
-                #print(message, flush=True)
-                #print("+" * 40, flush=True)
-                if message.get("type") == "text_delta":
-                    print(message["text"], end="", flush=True)
-                elif message.get("type") == "tool_execution":
-                    print(f"\n\n🔧 [Tool: {message['tool_name']}]", flush=True)
-                    #print(f"📥 Input: {json.dumps(message['tool_input'], indent=2)}", flush=True)
-                    #print(f"📤 Output:\n{message['tool_output']}", flush=True)
-                    #print("-" * 40, flush=True)
-
-            print("\n" + "-" * 80)
-            print()
-
-        except KeyboardInterrupt:
-            print("\n\n👋 Goodbye!")
-            break
-        except Exception as e:
-            print(f"\n❌ Error: {str(e)}\n")
-            import traceback
-            traceback.print_exc()
+            except Exception as e:
+                print(f"\n❌ Error: {str(e)}\n")
+                import traceback
+                traceback.print_exc()
+    finally:
+        # CRITICAL: Final cleanup when exiting (in case any processes remain)
+        await agent.cleanup()
 
 
 if __name__ == "__main__":

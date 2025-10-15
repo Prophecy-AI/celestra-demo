@@ -158,8 +158,12 @@ async def agent_turn(
 
     agent.tools.register(bq_tool)
 
-    async for message in agent.run(user_message):
-        yield message
+    try:
+        async for message in agent.run(user_message):
+            yield message
+    finally:
+        # CRITICAL: Cleanup background processes to prevent leaks
+        await agent.cleanup()
 
     workspace_volume.commit()
 

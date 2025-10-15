@@ -71,7 +71,11 @@ async def main():
     except Exception as e:
         log(f"❌ Agent error: {e}", 2)
         print(f"\n\nERROR: {e}\n", flush=True)
+        await agent.cleanup()  # Cleanup on error
         sys.exit(1)
+    finally:
+        # CRITICAL: Cleanup background processes to prevent leaks
+        await agent.cleanup()
 
     print("\n")
     log("✓ Agent run complete")

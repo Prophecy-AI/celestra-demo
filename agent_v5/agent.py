@@ -7,6 +7,9 @@ from anthropic import Anthropic
 from agent_v5.tools.registry import ToolRegistry
 from debug import log, with_session
 from agent_v5.tools.bash import BashTool
+from agent_v5.tools.bash_output import ReadBashOutputTool
+from agent_v5.tools.kill_shell import KillShellTool
+from agent_v5.tools.bash_process_registry import BashProcessRegistry
 from agent_v5.tools.read import ReadTool
 from agent_v5.tools.write import WriteTool
 from agent_v5.tools.edit import EditTool
@@ -25,13 +28,16 @@ class ResearchAgent:
         self.system_prompt = system_prompt
         self.conversation_history: List[Dict] = []
         self.tools = ToolRegistry(workspace_dir)
+        self.process_registry = BashProcessRegistry()  # Registry for background bash processes
         self._register_core_tools()
         self.anthropic_client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         self.run = with_session(session_id)(self.run)
 
     def _register_core_tools(self):
         """Register all core tools"""
-        self.tools.register(BashTool(self.workspace_dir))
+        self.tools.register(BashTool(self.workspace_dir, self.process_registry))
+        self.tools.register(ReadBashOutputTool(self.workspace_dir, self.process_registry))
+        self.tools.register(KillShellTool(self.workspace_dir, self.process_registry))
         self.tools.register(ReadTool(self.workspace_dir))
         self.tools.register(WriteTool(self.workspace_dir))
         self.tools.register(EditTool(self.workspace_dir))
@@ -39,6 +45,17 @@ class ResearchAgent:
         self.tools.register(GrepTool(self.workspace_dir))
         self.tools.register(TodoWriteTool(self.workspace_dir))
         self.tools.register(CohortDefinitionTool(self.workspace_dir))
+
+    async def cleanup(self) -> None:
+        """
+        Cleanup agent resources (kills all background processes)
+
+        IMPORTANT: Call this after agent.run() completes to prevent process leaks.
+        Especially critical for long-running agents or when agent is cancelled.
+        """
+        killed = await self.process_registry.cleanup()
+        if killed > 0:
+            log(f"✓ Cleaned up {killed} background processes", 1)
 
     async def run(self, user_message: str) -> AsyncGenerator[Dict, None]:
         """Main agentic loop"""
