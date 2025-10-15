@@ -10,6 +10,9 @@ ENV CODE_DIR=${CODE_DIR}
 ARG AGENT_DIR
 ENV AGENT_DIR=${AGENT_DIR}
 
+# CRITICAL: Force Python unbuffered output so background scripts show real-time output
+ENV PYTHONUNBUFFERED=1
+
 # Create required directories
 RUN mkdir -p ${LOGS_DIR} ${CODE_DIR} ${AGENT_DIR}
 
