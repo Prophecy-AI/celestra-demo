@@ -313,7 +313,15 @@ def chat():
                 if message.get("type") == "text_delta":
                     print(message["text"], end="", flush=True)
                 elif message.get("type") == "tool_execution":
-                    print(f"\n\n[Tool: {message['tool_name']}]", flush=True)
+                    # Show exactly what LLM sees
+                    print(f"\n\n{'='*80}", flush=True)
+                    print(f"🔧 TOOL CALL: {message['tool_name']}", flush=True)
+                    print(f"{'='*80}", flush=True)
+                    print(f"📥 INPUT (what LLM sent):", flush=True)
+                    print(json.dumps(message['tool_input'], indent=2), flush=True)
+                    print(f"\n📤 OUTPUT (what LLM received):", flush=True)
+                    print(message['tool_output'], flush=True)
+                    print(f"{'='*80}\n", flush=True)
 
             print("\n" + "-" * 80)
             print()

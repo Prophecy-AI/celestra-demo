@@ -2,6 +2,7 @@
 Bridge between mle-bench environment and agent_v5 KaggleAgent
 """
 import asyncio
+import json
 import os
 from pathlib import Path
 import sys
@@ -66,8 +67,15 @@ async def main():
                 print(text, end="", flush=True)
                 full_response.append(text)
             elif message.get("type") == "tool_execution":
-                tool_name = message["tool_name"]
-                log(f"🔧 Tool executed: {tool_name}")
+                # Show exactly what LLM sees
+                print(f"\n\n{'='*80}", flush=True)
+                log(f"🔧 TOOL CALL: {message['tool_name']}")
+                print(f"{'='*80}", flush=True)
+                print(f"📥 INPUT (what LLM sent):", flush=True)
+                print(json.dumps(message['tool_input'], indent=2), flush=True)
+                print(f"\n📤 OUTPUT (what LLM received):", flush=True)
+                print(message['tool_output'], flush=True)
+                print(f"{'='*80}\n", flush=True)
     except Exception as e:
         log(f"❌ Agent error: {e}", 2)
         print(f"\n\nERROR: {e}\n", flush=True)
