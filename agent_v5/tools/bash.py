@@ -50,11 +50,10 @@ class BashTool(BaseTool):
                     },
                     "background": {
                         "type": "boolean",
-                        "description": "If true, run command in background and return shell_id immediately. Use ReadBashOutput(shell_id) to monitor progress and KillShell(shell_id) to stop it. Perfect for long-running tasks like model training.",
-                        "default": False
+                        "description": "REQUIRED: Explicitly choose execution mode. If true, run command in background and return shell_id immediately. Use ReadBashOutput(shell_id) to monitor progress and KillShell(shell_id) to stop it. Perfect for long-running tasks like model training. If false, command blocks until completion (max 120s timeout)."
                     }
                 },
-                "required": ["command"]
+                "required": ["command", "background"]
             }
         }
 
